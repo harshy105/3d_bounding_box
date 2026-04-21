@@ -52,7 +52,7 @@ def draw_bboxes_on_image(rgb_image: np.ndarray, bbox: np.ndarray, pc: np.ndarray
     cmap = plt.get_cmap("tab10")
     
     for i in range(num_instances):
-        # --- MINIMAL CHANGE 1: Skip if this isn't the target index ---
+        # --- 1: Skip if this isn't the target index ---
         if target_idx is not None and i != target_idx:
             continue
             
@@ -136,7 +136,7 @@ def plot_instance(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray,
     
     return ax
 
-def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Optional[int] = 15,
+def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Optional[int] = 0,
                   target_size: Optional[Tuple]=(64, 64)) -> np.ndarray:
     # Uses the 2D pixel mask directly to crop the RGB image
     rows = np.any(inst_mask_2d > 0, axis=1)
@@ -164,14 +164,18 @@ def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Op
     return crop_resized
 
 def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray, 
-                                     rgb_path: str) -> None:
+                                     img: np.ndarray) -> None:
     """
     Creates a 2-Row grid. 
     Row 1: RGB Crops (Now with 3D BBoxes projected onto them!). 
     Row 2: 3D Point Cloud + BBox views below their respective crops.
-    """
-    img = mpimg.imread(rgb_path)
     
+    Input:
+    pc.shape = (3, h, w), where 3 store the 3d coordinate of each pixel
+    mask.shape = (num_instances, h, w)
+    bbox.shape = (num_instances, h, w)
+    image.shape = (h, w, 3), where 3 for RGB    
+    """    
     num_instances = mask.shape[0]
     fig = plt.figure(figsize=(4 * num_instances, 8))
     
@@ -207,7 +211,7 @@ if __name__ == "__main__":
     pc = np.load(os.path.join(data_path, scene_id, "pc.npy"))
     mask = np.load(os.path.join(data_path, scene_id, "mask.npy"))
     bbox = np.load(os.path.join(data_path, scene_id, "bbox3d.npy"))
-    rgb_path = os.path.join(data_path, scene_id, "rgb.jpg")
+    img = mpimg.imread(os.path.join(data_path, scene_id, "rgb.jpg"))
     
     # Run the top-down row/column visualization
-    visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, rgb_path=rgb_path)
+    visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, img=img)
