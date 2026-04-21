@@ -2,13 +2,13 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from typing import Optional
+from typing import Optional, Tuple
 import matplotlib.image as mpimg
 import cv2 
 
 from config import Paths
 
-def recover_intrinsics(pc: np.array):
+def recover_intrinsics(pc: np.ndarray) -> np.ndarray:
     """
     Reverse-engineers the Camera Intrinsic Matrix (K) from the organized point cloud.
     Uses u = fx * (X/Z) + cx and v = fy * (Y/Z) + cy.
@@ -33,7 +33,8 @@ def recover_intrinsics(pc: np.array):
     ])
     return K
 
-def draw_bboxes_on_image(rgb_image, bbox, pc, target_idx=None):
+def draw_bboxes_on_image(rgb_image: np.ndarray, bbox: np.ndarray, pc: np.ndarray,  
+                         target_idx: Optional[int] = None) -> np.ndarray:
     """
     Projects 3D bounding boxes onto the 2D image plane using the recovered camera matrix.
     If target_idx is provided, only draws that specific instance's bounding box.
@@ -82,8 +83,9 @@ def draw_bboxes_on_image(rgb_image, bbox, pc, target_idx=None):
                 
     return img_drawn
 
-def plot_instance(pc: np.array, mask: np.array, bbox: np.array, 
-                  instance_idx: Optional[int]=0, ax: Optional[plt.axes] = None):
+def plot_instance(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray, 
+                  instance_idx: Optional[int]=0, 
+                  ax: Optional[plt.Axes] = None) -> plt.Axes:
     # Flatten H and W to align coordinates with mask
     x, y, z = pc[0].flatten(), pc[1].flatten(), pc[2].flatten()
     all_points = np.stack([x, y, z], axis=1)
@@ -134,7 +136,8 @@ def plot_instance(pc: np.array, mask: np.array, bbox: np.array,
     
     return ax
 
-def get_rgb_crop(rgb_image, inst_mask_2d, padding_px=15, target_size=(64, 64)):
+def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Optional[int] = 15,
+                  target_size: Optional[Tuple]=(64, 64)) -> np.ndarray:
     # Uses the 2D pixel mask directly to crop the RGB image
     rows = np.any(inst_mask_2d > 0, axis=1)
     cols = np.any(inst_mask_2d > 0, axis=0)
@@ -160,7 +163,8 @@ def get_rgb_crop(rgb_image, inst_mask_2d, padding_px=15, target_size=(64, 64)):
     crop_resized = cv2.resize(crop, target_size)
     return crop_resized
 
-def visualize_all_instances_combined(pc: np.array, mask: np.array, bbox: np.array, rgb_path: str):
+def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray, 
+                                     rgb_path: str) -> None:
     """
     Creates a 2-Row grid. 
     Row 1: RGB Crops (Now with 3D BBoxes projected onto them!). 
