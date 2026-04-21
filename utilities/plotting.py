@@ -1,8 +1,8 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from typing import Optional
+import matplotlib.image as mpimg
 
 from config import Paths
 
@@ -43,9 +43,9 @@ def plot_instance(pc: np.array, mask: np.array, bbox: np.array,
         ax.plot(inst_bbox[list(edge), 0], inst_bbox[list(edge), 1], inst_bbox[list(edge), 2], 
                 c="red", linewidth=2)
 
-    # --- NEW CODE: Plot the Origin (Camera center) and Axes ---
+    # --- Plot the Origin (Camera center) and Axes ---
     
-    # 1. Plot the origin (0, 0, 0) as a large black star
+    #  Plot the origin (0, 0, 0) as a large black star
     ax.scatter(0, 0, 0, color="black", s=200, marker="*", label="Origin (0,0,0)")
 
     # 2. Dynamically calculate axis length based on distance to the object
@@ -56,44 +56,86 @@ def plot_instance(pc: np.array, mask: np.array, bbox: np.array,
     else:
         axis_len = 1.0
 
-    # 3. Draw X (Red), Y (Green), and Z (Blue) axes starting from origin
+    #  Draw X (Red), Y (Green), and Z (Blue) axes starting from origin
     ax.plot([0, axis_len], [0, 0], [0, 0], color="red", linewidth=3, label="X-axis")
     ax.plot([0, 0], [0, axis_len], [0, 0], color="green", linewidth=3, label="Y-axis")
     ax.plot([0, 0], [0, 0], [0, axis_len], color="blue", linewidth=3, label="Z-axis")
 
-    # -----------------------------------------------------------
-
     ax.set_title(f"Instance {instance_idx} Visualization (with Origin)")
     ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
     
-    # Make sure 0,0,0 is actually visible in the plot limits
-    all_x = np.append(pts[:, 0] if len(pts)>0 else [], [0, axis_len])
-    all_y = np.append(pts[:, 1] if len(pts)>0 else [], [0, axis_len])
-    all_z = np.append(pts[:, 2] if len(pts)>0 else [], [0, axis_len])
-    
-    # ax.set_xlim([np.min(all_x), np.max(all_x)])
-    # ax.set_ylim([np.min(all_y), np.max(all_y)])
-    # ax.set_zlim([np.min(all_z), np.max(all_z)])
-
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc="upper right")
     
     return ax
+
+
+def plot_rgb(rgb_path: str):
+    """Plots the RGB image alone."""
+    img = mpimg.imread(rgb_path)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.imshow(img)
+    ax.set_title("Original RGB Image")
+    ax.axis("off")
+    plt.show()
     
+
+def compare_projection_and_rgb(pc: np.array, mask: np.array, rgb_path: str):
+    """Plots the RGB image alongside a 2D projection (Z=0) of the point cloud."""
+    img = mpimg.imread(rgb_path)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
     
+    # Left: RGB Image
+    axes[0].imshow(img)
+    axes[0].set_title("RGB Image")
+    axes[0].axis("off")
+
+    # Right: 2D Point Cloud Projection (X vs Y)
+    x, y = pc[0].flatten(), pc[1].flatten()
+    num_instances = mask.shape[0]
+    cmap = plt.get_cmap("tab10")
+
+    # Plot each instance with a different color
+    for i in range(num_instances):
+        inst_mask = mask[i].flatten()
+        inst_x = x[inst_mask > 0]
+        inst_y = y[inst_mask > 0]
+        
+        color = cmap(i % 10)
+        if len(inst_x) > 0:
+            axes[1].scatter(inst_x, inst_y, s=1, color=color, label=f"Instance {i}", alpha=0.6)
+
+    axes[1].set_title("2D Projection of Point Cloud (Z=0)")
+    axes[1].set_xlabel("X-axis")
+    axes[1].set_ylabel("Y-axis")
+    
+    # Invert Y axis because image coordinates (Y down) 
+    # usually oppose standard 3D plot coordinates (Y up).
+    axes[1].invert_yaxis()
+    
+    axes[1].legend(loc="upper right")
+    plt.tight_layout()
+    plt.show()
+    plt.close("all")
+
 if __name__ == "__main__":
     data_path = Paths.data
 
-    # 1. Load the data
+    # Load the data
     scene_id = "8b061a8b-9915-11ee-9103-bbb8eae05561"
     pc = np.load(os.path.join(data_path, scene_id, "pc.npy"))
     mask = np.load(os.path.join(data_path, scene_id, "mask.npy"))
     bbox = np.load(os.path.join(data_path, scene_id, "bbox3d.npy"))
+    rgb_path = os.path.join(data_path, scene_id, "rgb.jpg")
     
+    # Compare the 2D projection and the RGB image side-by-side
+    compare_projection_and_rgb(pc=pc, mask=mask, rgb_path=rgb_path)
+
+    # (Optional) Plot 3D instances
     ax = None
     for instance_idx in range(mask.shape[0]):
         ax = plot_instance(pc=pc, mask=mask, bbox=bbox, instance_idx=instance_idx, ax=ax)
-    
     plt.show()
     plt.close("all")
