@@ -205,13 +205,13 @@ def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.
 
 if __name__ == "__main__":
     data_path = Paths.data
-
-    # Load the data
-    scene_id = "8b061a8b-9915-11ee-9103-bbb8eae05561"
-    pc = np.load(os.path.join(data_path, scene_id, "pc.npy"))
-    mask = np.load(os.path.join(data_path, scene_id, "mask.npy"))
-    bbox = np.load(os.path.join(data_path, scene_id, "bbox3d.npy"))
-    img = mpimg.imread(os.path.join(data_path, scene_id, "rgb.jpg"))
     
-    # Run the top-down row/column visualization
-    visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, img=img)
+    for scene_id in os.listdir(data_path):
+        scene_dir = os.path.join(data_path, scene_id)
+        pc = np.load(os.path.join(scene_dir, "pc.npy"))
+        mask = np.load(os.path.join(scene_dir, "mask.npy"))
+        bbox = np.load(os.path.join(scene_dir, "bbox3d.npy"))
+        img = mpimg.imread(os.path.join(scene_dir, "rgb.jpg"))
+        
+        # Run the top-down row/column visualization
+        visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, img=img)
