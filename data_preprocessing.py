@@ -59,7 +59,7 @@ if __name__ == "__main__":
                 # Extract bounding box (8, 3)
                 bbox_3d = bbox[i]
                 
-                # Extract image crop (64, 64, 3)
+                # Extract image crop (64, 64, 4), 4th is the mask
                 img_crop = get_rgb_crop(img, inst_mask_2d, target_size=data_preprocessing.crop_img_size)
                 
                 # Package the parsed data
