@@ -89,11 +89,11 @@ class LMDBInstanceDataset(Dataset):
         img_tensor = sample["img_crop"]
         pc_tensor = sample["pc_pts"]
         original_box = sample["bbox_3d"]
-        params = sample["bbox_params"]
+        bbox_params = sample["bbox_params"]
         
         # Reconstruct the box from the extracted parameters
         # (Unpack params according to what extract_3d_bbox_params returns)
-        reconstructed_box = reconstruct_box(*params)
+        reconstructed_box = reconstruct_box(*bbox_params)
         
         # Validation Check
         is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
