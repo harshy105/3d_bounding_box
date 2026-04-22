@@ -40,6 +40,9 @@ def draw_bboxes_on_image(rgb_image: np.ndarray, bbox: np.ndarray, pc: np.ndarray
     If target_idx is provided, only draws that specific instance's bounding box.
     """
     K = recover_intrinsics(pc)
+    if abs(K[0, 0] - 902.91) + abs(K[1, 1] - 902.91) > 1:
+        print(f"fx {K[0, 0]}, fy {K[1, 1]}")
+        
     img_drawn = rgb_image.copy() # mpimg loads as RGB
     
     edges = [
