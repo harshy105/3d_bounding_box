@@ -8,14 +8,16 @@ import matplotlib.pyplot as plt
 from typing import Dict
 
 from config import Paths
+from config import data_loader_config
 from utilities.utils import extract_3d_bbox_params, augment_instance, reconstruct_box
 from utilities.plotting import draw_bboxes_on_image, plot_instance
 
 class LMDBInstanceDataset(Dataset):
-    def __init__(self, lmdb_path: str, apply_aug: bool = False, num_points: int = 1024) -> None:
+    def __init__(self, lmdb_path: str, data_loader_config: data_loader_config, 
+                 apply_aug: bool = False) -> None:
         self.lmdb_path = lmdb_path
         self.apply_aug = apply_aug
-        self.num_points = num_points
+        self.num_points = data_loader_config.max_number_pc_pts
         self.env = None
         
         # Open environment once just to extract the keys, then close it. 
@@ -51,32 +53,29 @@ class LMDBInstanceDataset(Dataset):
         if self.apply_aug:
             pc_pts, bbox_3d, img_crop = augment_instance(pc_pts, bbox_3d, img_crop)
             
-        # Ensure uniform point cloud size for batching (Subsample or Pad)
+        # 2. Ensure uniform point cloud size for batching (Subsample or Pad)
         num_current_pts = pc_pts.shape[0]
         if num_current_pts >= self.num_points:
             choice = np.random.choice(num_current_pts, self.num_points, replace=False)
         else:
             choice = np.random.choice(num_current_pts, self.num_points, replace=True)
         pc_pts = pc_pts[choice, :]
+        pc_tensor = torch.from_numpy(pc_pts).float()
 
         # 3. Convert image to Torch and permute to (Channels, Height, Width) format
         img_tensor = torch.from_numpy(img_crop).permute(2, 0, 1).float() / 255.0
         
-        # 4. Convert point cloud to Torch
-        pc_tensor = torch.from_numpy(pc_pts).float()
-        
-        # Convert bounding box to Torch before parameter extraction
+        # 4. Extract features from the 3D bounding box
         bbox_tensor = torch.from_numpy(bbox_3d).float()
-        
-        # 2. Extract features from the 3D bounding box
-        # Assuming your function returns a tuple of parameters (e.g., center, size, quaternion)
-        bbox_params = extract_3d_bbox_params(bbox_tensor)
+        bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
         
         return {
             "img_crop": img_tensor,
             "pc_pts": pc_tensor,
             "bbox_3d": bbox_tensor,
-            "bbox_params": bbox_params, # Varies based on your extraction logic
+            "bbox_center": bbox_center,
+            "bbox_dims": bbox_dims,
+            "bbox_rot_6d": bbox_rot_6d,
             "key": self.keys[idx].decode('ascii')
         }
 
@@ -89,11 +88,13 @@ class LMDBInstanceDataset(Dataset):
         img_tensor = sample["img_crop"]
         pc_tensor = sample["pc_pts"]
         original_box = sample["bbox_3d"]
-        bbox_params = sample["bbox_params"]
+        bbox_center = sample["bbox_center"]
+        bbox_dims = sample["bbox_dims"]
+        bbox_rot_6d = sample["bbox_rot_6d"]
         
         # Reconstruct the box from the extracted parameters
         # (Unpack params according to what extract_3d_bbox_params returns)
-        reconstructed_box = reconstruct_box(*bbox_params)
+        reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
         
         # Validation Check
         is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
@@ -150,7 +151,8 @@ class InstanceDataModule(LightningDataModule):
 
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic
-    dataset = LMDBInstanceDataset(Paths.parsed_data, apply_aug=True)
+    dataset = LMDBInstanceDataset(Paths.parsed_data, data_loader_config=data_loader_config,
+                                  apply_aug=True)
     
     # Check if the dataset contains any samples before starting
     if len(dataset) == 0:

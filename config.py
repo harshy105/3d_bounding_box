@@ -9,3 +9,7 @@ class Paths:
 @dataclass
 class data_preprocessing:
     crop_img_size: Tuple = (64, 64)
+    
+@dataclass
+class data_loader_config:
+    max_number_pc_pts: int = 1024

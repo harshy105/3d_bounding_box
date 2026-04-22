@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 
 from typing import Optional, Tuple
+from torch import Tensor
 
 def recover_intrinsics(pc: np.ndarray) -> np.ndarray:
     """
@@ -69,7 +70,7 @@ def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Op
     
     return crop_4d
 
-def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarray):
+def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarray) -> Tuple[np.ndarray]:
     """
     Applies decoupled and coupled augmentations to a single instance.
     pc_pts: (N, 3) 3D points of the instance
@@ -117,7 +118,7 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
 
     return pts_aug, box_aug, img_aug
 
-def extract_3d_bbox_params(box):
+def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor]:
     """
     Converts an (8, 3) bounding box into its center, dimensions, and 6D rotation.
     
@@ -158,7 +159,7 @@ def extract_3d_bbox_params(box):
     
     return center, dims, rot_6d
 
-def reconstruct_box(center, dims, rot_6d):
+def reconstruct_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
     """
     Reconstructs the original (8, 3) bounding box from parameters.
     
