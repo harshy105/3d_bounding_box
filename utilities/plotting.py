@@ -163,8 +163,56 @@ def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Op
     crop_resized = cv2.resize(crop, target_size)
     return crop_resized
 
+def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarray):
+    """
+    Applies decoupled and coupled augmentations to a single instance.
+    pc_pts: (N, 3) 3D points of the instance
+    bbox_3d: (8, 3) 3D bounding box corners
+    img_crop: (H, W, 3) RGB crop of the instance
+    """
+    pts_aug = pc_pts.copy()
+    box_aug = bbox_3d.copy()
+    img_aug = img_crop.copy()
+    
+    # Decoupled 3D (bbox and point cloud) Geometric Augmentations
+    if np.random.rand() > 0.3:
+        theta = np.random.uniform(-np.pi / 4, np.pi / 4)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        R = np.array([
+            [ cos_t, 0, sin_t],
+            [     0, 1,     0],
+            [-sin_t, 0, cos_t]
+        ])
+        pts_aug = pts_aug @ R.T
+        box_aug = box_aug @ R.T
+
+    if np.random.rand() > 0.3:
+        shift = np.random.uniform(-0.05, 0.05, size=(1, 3)) 
+        pts_aug += shift
+        box_aug += shift
+        
+    # Decoupled 2D Image Augmentations
+    if np.random.rand() > 0.3:
+        factor = np.random.uniform(0.7, 1.3)
+        img_aug = cv2.convertScaleAbs(img_aug, alpha=factor, beta=0)
+
+    # if np.random.rand() > 0.3:
+    #     h, w = img_aug.shape[:2]
+    #     crop_h, crop_w = int(h * 0.3), int(w * 0.3)
+    #     x = np.random.randint(0, w - crop_w)
+    #     y = np.random.randint(0, h - crop_h)
+    #     img_aug[y:y+crop_h, x:x+crop_w] = 0 
+        
+    # 3. Coupled 2D-3D Augmentation (Horizontal Flip)
+    if np.random.rand() > 0.5:
+        img_aug = cv2.flip(img_aug, 1) 
+        pts_aug[:, 0] = -pts_aug[:, 0]
+        box_aug[:, 0] = -box_aug[:, 0]
+
+    return pts_aug, box_aug, img_aug
+
 def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray, 
-                                     img: np.ndarray) -> None:
+                                     img: np.ndarray, apply_aug: bool = False) -> None:
     """
     Creates a 2-Row grid. 
     Row 1: RGB Crops (Now with 3D BBoxes projected onto them!). 
@@ -190,13 +238,41 @@ def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.
         # Pass the image with the single bounding box into the crop function
         crop = get_rgb_crop(img_with_box, inst_mask_2d)
         
+        # --- Augmentation Logic ---
+        pc_plot = pc
+        bbox_plot = bbox
+        title_prefix = "Original"
+
+        if apply_aug:
+            # Extract exactly the points belonging to this instance
+            valid_pixels = inst_mask_2d > 0 # Shape: (h, w)
+            pts = pc[:, valid_pixels].T  # Shape: (N, 3)
+            
+            if len(pts) > 0: 
+                # 2. Apply augmentation
+                pts_aug, box_aug, crop_aug = augment_instance(pts, bbox[i], crop)
+                
+                # 3. Inject augmented points back into a temporary copy 
+                #    so plot_instance can read them seamlessly
+                pc_plot = pc.copy()
+                pc_plot[:, valid_pixels] = pts_aug.T
+                
+                bbox_plot = bbox.copy()
+                bbox_plot[i] = box_aug
+                
+                crop = crop_aug
+                title_prefix = "Augmented"
+        
         ax_rgb.imshow(crop)
-        ax_rgb.set_title(f"Instance {i}: RGB + 2D Proj")
+        ax_rgb.set_title(f"Instance {i}: {title_prefix} RGB")
         ax_rgb.axis("off")
         
         # --- Row 2: 3D Visualization ---
         ax_3d = fig.add_subplot(2, num_instances, num_instances + i + 1, projection="3d")
-        plot_instance(pc, mask, bbox, instance_idx=i, ax=ax_3d)
+        
+        # Pass the (potentially modified) full arrays to the untouched plot_instance
+        plot_instance(pc_plot, mask, bbox_plot, instance_idx=i, ax=ax_3d)
+        ax_3d.set_title(f"Instance {i}: {title_prefix} 3D")
         
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.6)
@@ -213,5 +289,5 @@ if __name__ == "__main__":
         bbox = np.load(os.path.join(scene_dir, "bbox3d.npy"))
         img = mpimg.imread(os.path.join(scene_dir, "rgb.jpg"))
         
-        # Run the top-down row/column visualization
-        visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, img=img)
+        # Run with apply_aug=True to see the integrated augmentations
+        visualize_all_instances_combined(pc=pc, mask=mask, bbox=bbox, img=img, apply_aug=True)
