@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import shutil
 import matplotlib.image as mpimg
 import lmdb
 import pickle
@@ -7,12 +8,18 @@ import warnings
 from tqdm import tqdm
 
 from config import Paths
+from config import data_preprocessing
 from utilities.utils import get_rgb_crop
 
 if __name__ == "__main__":
     data_path = Paths.data
     parsed_data_path = Paths.parsed_data # store the data here
     
+    # Check if the parsed data directory already exists and remove it
+    if os.path.exists(parsed_data_path):
+        print(f"Removing existing parsed data at: {parsed_data_path}")
+        shutil.rmtree(parsed_data_path)
+        
     # Ensure the target directory for LMDB exists
     os.makedirs(parsed_data_path, exist_ok=True)
     
@@ -53,7 +60,7 @@ if __name__ == "__main__":
                 bbox_3d = bbox[i]
                 
                 # Extract image crop (64, 64, 3)
-                img_crop = get_rgb_crop(img, inst_mask_2d)
+                img_crop = get_rgb_crop(img, inst_mask_2d, target_size=data_preprocessing.crop_img_size)
                 
                 # Package the parsed data
                 sample = {
