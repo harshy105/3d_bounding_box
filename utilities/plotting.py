@@ -83,18 +83,12 @@ def draw_bboxes_on_image(rgb_image: np.ndarray, bbox: np.ndarray, pc: np.ndarray
                 
     return img_drawn
 
-def plot_instance(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray, 
-                  instance_idx: Optional[int]=0, 
+def plot_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, 
                   ax: Optional[plt.Axes] = None) -> plt.Axes:
-    # Flatten H and W to align coordinates with mask
-    x, y, z = pc[0].flatten(), pc[1].flatten(), pc[2].flatten()
-    all_points = np.stack([x, y, z], axis=1)
-    
-    # Filter points belonging to this specific instance
-    inst_mask = mask[instance_idx].flatten()
-    inst_points = all_points[inst_mask > 0]
-    inst_bbox = bbox[instance_idx]
-
+    """
+    pc_pts: (N, 3) 3D points of the instance
+    bbox_3d: (8, 3) 3D bounding box corners
+    """
     # Define connectivity for an 8-corner 3D box
     edges = [
         (0, 1), (1, 2), (2, 3), (3, 0), # Bottom
@@ -107,24 +101,23 @@ def plot_instance(pc: np.ndarray, mask: np.ndarray, bbox: np.ndarray,
         ax = fig.add_subplot(111, projection="3d")
 
     # Plot object points (subsampled for speed)
-    if len(inst_points) > 2000:
-        idx = np.random.choice(len(inst_points), 2000, replace=False)
-        pts = inst_points[idx]
+    if len(pc_pts) > 2000:
+        idx = np.random.choice(len(pc_pts), 2000, replace=False)
+        pts = pc_pts[idx]
     else:
-        pts = inst_points
+        pts = pc_pts
 
     if len(pts) > 0:
         ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, c="blue", alpha=0.5)
 
     # Draw Bounding Box
     for edge in edges:
-        ax.plot(inst_bbox[list(edge), 0], inst_bbox[list(edge), 1], inst_bbox[list(edge), 2], 
+        ax.plot(bbox_3d[list(edge), 0], bbox_3d[list(edge), 1], bbox_3d[list(edge), 2], 
                 c="red", linewidth=2)
 
     # Plot the Origin (Camera center) and Axes
     ax.scatter(0, 0, 0, color="black", s=200, marker="*", label="Origin (0,0,0)")
 
-    ax.set_title(f"Instance {instance_idx}: 3D")
     ax.set_xlabel("X"); ax.set_ylabel("Y"); ax.set_zlabel("Z")
     
     # --- Set Viewpoint ---
@@ -238,30 +231,17 @@ def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.
         # Pass the image with the single bounding box into the crop function
         crop = get_rgb_crop(img_with_box, inst_mask_2d)
         
-        # --- Augmentation Logic ---
-        pc_plot = pc
-        bbox_plot = bbox
+        # Extract exactly the points belonging to this instance first
+        valid_pixels = inst_mask_2d > 0 # Shape: (h, w)
+        pc_pts = pc[:, valid_pixels].T  # Shape: (N, 3)
+        bbox_3d = bbox[i].copy()
+        
         title_prefix = "Original"
 
-        if apply_aug:
-            # Extract exactly the points belonging to this instance
-            valid_pixels = inst_mask_2d > 0 # Shape: (h, w)
-            pts = pc[:, valid_pixels].T  # Shape: (N, 3)
-            
-            if len(pts) > 0: 
-                # 2. Apply augmentation
-                pts_aug, box_aug, crop_aug = augment_instance(pts, bbox[i], crop)
-                
-                # 3. Inject augmented points back into a temporary copy 
-                #    so plot_instance can read them seamlessly
-                pc_plot = pc.copy()
-                pc_plot[:, valid_pixels] = pts_aug.T
-                
-                bbox_plot = bbox.copy()
-                bbox_plot[i] = box_aug
-                
-                crop = crop_aug
-                title_prefix = "Augmented"
+        # Apply augmentation if requested and points exist
+        if apply_aug and len(pc_pts) > 0:
+            pc_pts, bbox_3d, crop = augment_instance(pc_pts, bbox_3d, crop)
+            title_prefix = "Augmented"
         
         ax_rgb.imshow(crop)
         ax_rgb.set_title(f"Instance {i}: {title_prefix} RGB")
@@ -270,8 +250,9 @@ def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.
         # --- Row 2: 3D Visualization ---
         ax_3d = fig.add_subplot(2, num_instances, num_instances + i + 1, projection="3d")
         
-        # Pass the (potentially modified) full arrays to the untouched plot_instance
-        plot_instance(pc_plot, mask, bbox_plot, instance_idx=i, ax=ax_3d)
+        # Pass the extracted instance arrays directly to plot_instance
+        plot_instance(pc_pts, bbox_3d, ax=ax_3d)
+        ax_3d.set_title(f"Instance {i}: 3D")
         ax_3d.set_title(f"Instance {i}: {title_prefix} 3D")
         
     plt.tight_layout()
