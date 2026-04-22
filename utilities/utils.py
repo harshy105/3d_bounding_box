@@ -117,7 +117,7 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
 
     return pts_aug, box_aug, img_aug
 
-def extract_parameters(box):
+def extract_3d_bbox_params(box):
     """
     Converts an (8, 3) bounding box into its center, dimensions, and 6D rotation.
     

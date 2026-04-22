@@ -3,7 +3,7 @@ from config import Paths
 import torch
 import numpy as np
 
-from utilities.utils import extract_parameters, reconstruct_box
+from utilities.utils import extract_3d_bbox_params, reconstruct_box
 
 if __name__ == "__main__":
     # Assuming Paths.data is defined in your environment
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         for i, original_box in enumerate(bbox_tensor):
             
             # 1. Forward Pass: Extract the 6D representation, center, and dims
-            center, dims, rot_6d = extract_parameters(original_box)
+            center, dims, rot_6d = extract_3d_bbox_params(original_box)
             
             # 2. Reverse Pass: Reconstruct the box from the parameters
             reconstructed_box = reconstruct_box(center, dims, rot_6d)
