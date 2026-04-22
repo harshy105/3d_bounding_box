@@ -5,13 +5,14 @@ import lmdb
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from typing import Dict
 
 from config import Paths
 from utilities.utils import extract_3d_bbox_params, augment_instance, reconstruct_box
 from utilities.plotting import draw_bboxes_on_image, plot_instance
 
 class LMDBInstanceDataset(Dataset):
-    def __init__(self, lmdb_path: str, apply_aug: bool = False, num_points: int = 1024):
+    def __init__(self, lmdb_path: str, apply_aug: bool = False, num_points: int = 1024) -> None:
         self.lmdb_path = lmdb_path
         self.apply_aug = apply_aug
         self.num_points = num_points
@@ -24,21 +25,24 @@ class LMDBInstanceDataset(Dataset):
             self.keys = [key for key, _ in txn.cursor()]
         env.close()
 
-    def _init_env(self):
+    def _init_env(self) -> None:
         # Lazy initialization for DataLoader workers
         if self.env is None:
             self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False, readahead=False, meminit=False)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.keys)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Dict:
         self._init_env()
         
         with self.env.begin() as txn:
             byteflow = txn.get(self.keys[idx])
             sample = pickle.loads(byteflow)
             
+        return self.process_sample(sample)
+            
+    def process_sample(self, sample: Dict) -> Dict:            
         pc_pts = sample["pc_pts"]
         bbox_3d = sample["bbox_3d"]
         img_crop = sample["img_crop"]
@@ -76,7 +80,7 @@ class LMDBInstanceDataset(Dataset):
             "key": self.keys[idx].decode('ascii')
         }
 
-    def visualize_debug_sample(self, idx: int):
+    def visualize_debug_sample(self, idx: int) -> None:
         """
         5. Visualizes a sample to debug the extraction and reconstruction pipeline.
         """
@@ -123,24 +127,24 @@ class LMDBInstanceDataset(Dataset):
 
 
 class InstanceDataModule(LightningDataModule):
-    def __init__(self, batch_size: int = 32, num_workers: int = 4, apply_aug: bool = True):
+    def __init__(self, batch_size: int = 32, num_workers: int = 4, apply_aug: bool = True) -> None:
         super().__init__()
         self.lmdb_path = Paths.parsed_data
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.apply_aug = apply_aug
 
-    def setup(self, stage=None):
+    def setup(self, stage=None) -> None:
         # In a real scenario, you'd split your LMDB into train/val here.
         # For now, we wrap the whole parsed data.
         self.train_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=self.apply_aug)
         self.val_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=False)
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset, batch_size=self.batch_size, 
                           shuffle=True, num_workers=self.num_workers, drop_last=True)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(self.val_dataset, batch_size=self.batch_size, 
                           shuffle=False, num_workers=self.num_workers)
 
