@@ -1,5 +1,7 @@
 import numpy as np
 import cv2 
+import torch
+import torch.nn.functional as F
 
 from typing import Optional, Tuple
 
@@ -114,3 +116,94 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
         box_aug[:, 0] = -box_aug[:, 0]
 
     return pts_aug, box_aug, img_aug
+
+def extract_parameters(box):
+    """
+    Converts an (8, 3) bounding box into its center, dimensions, and 6D rotation.
+    
+    Args:
+        box (torch.Tensor): Shape (8, 3), corners ordered consistently.
+        
+    Returns:
+        center (torch.Tensor): Shape (3,)
+        dims (torch.Tensor): Shape (3,) -> [Width, Height, Length]
+        rot_6d (torch.Tensor): Shape (6,) -> Continuous 6D rotation representation
+    """
+    # 1. Center is the mean of all 8 points
+    center = box.mean(dim=0)
+    
+    # 2. Extract edge vectors based on strict corner indices
+    # Right (X-axis): Vector from Front-Left-Bottom (0) to Front-Right-Bottom (1)
+    vec_x = box[1] - box[0] 
+    
+    # Up (Y-axis): Vector from Front-Left-Bottom (0) to Front-Left-Top (4)
+    vec_y = box[4] - box[0] 
+    
+    # Forward (Z-axis): Vector from Back-Right-Bottom (2) to Front-Right-Bottom (1)
+    vec_z = box[1] - box[2] 
+    
+    # 3. Compute dimensions (edge lengths)
+    w = torch.norm(vec_x)
+    h = torch.norm(vec_y)
+    l = torch.norm(vec_z)
+    dims = torch.stack([w, h, l])
+    
+    # 4. Create orthonormal basis vectors (X and Y)
+    # We only need the first two columns for the 6D representation
+    v1 = vec_x / w
+    v2 = vec_y / h
+    
+    # Flatten the two 3D vectors into a single 6D vector
+    rot_6d = torch.cat([v1, v2], dim=0)
+    
+    return center, dims, rot_6d
+
+def reconstruct_box(center, dims, rot_6d):
+    """
+    Reconstructs the original (8, 3) bounding box from parameters.
+    
+    Args:
+        center (torch.Tensor): Shape (3,)
+        dims (torch.Tensor): Shape (3,) -> [Width, Height, Length]
+        rot_6d (torch.Tensor): Shape (6,)
+        
+    Returns:
+        box (torch.Tensor): Shape (8, 3), reconstructed bounding box
+    """
+    w, h, l = dims
+    
+    # 1. Unpack the 6D representation back into raw X and Y vectors
+    v1_raw = rot_6d[:3]
+    v2_raw = rot_6d[3:]
+    
+    # 2. Apply Gram-Schmidt Orthogonalization
+    # Normalize X
+    v1 = F.normalize(v1_raw, dim=0)
+    
+    # Make Y orthogonal to X, then normalize
+    v2_proj = v2_raw - torch.dot(v2_raw, v1) * v1
+    v2 = F.normalize(v2_proj, dim=0)
+    
+    # 3. Mathematically enforce the Z axis via Cross Product (Right-Hand Rule)
+    # This guarantees the determinant is +1 and prevents mirrored boxes
+    v3 = torch.cross(v1, v2)
+    
+    # 4. Build the 3x3 Rotation Matrix
+    R = torch.stack([v1, v2, v3], dim=1)
+    
+    # 5. Define the 8 corners in local space (centered at origin, 0 rotation)
+    # The order MUST match the assumptions made in the forward function
+    x_coords = torch.tensor([-w/2,  w/2,  w/2, -w/2, -w/2,  w/2,  w/2, -w/2])
+    y_coords = torch.tensor([-h/2, -h/2, -h/2, -h/2,  h/2,  h/2,  h/2,  h/2])
+    z_coords = torch.tensor([-l/2, -l/2,  l/2,  l/2, -l/2, -l/2,  l/2,  l/2])
+    
+    local_corners = torch.stack([x_coords, y_coords, z_coords], dim=1) # Shape (8, 3)
+    
+    # 6. Apply Rotation and Translation
+    # Rotate: local_corners @ R.T (Matrix multiplication)
+    rotated_corners = torch.matmul(local_corners, R.t())
+    
+    # Translate to center
+    box = rotated_corners + center
+    
+    return box
