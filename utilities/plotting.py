@@ -146,7 +146,8 @@ def visualize_all_instances_combined(pc: np.ndarray, mask: np.ndarray, bbox: np.
             pc_pts, bbox_3d, crop = augment_instance(pc_pts, bbox_3d, crop)
             title_prefix = "Augmented"
         
-        ax_rgb.imshow(crop)
+        ax_rgb.imshow(crop[:, :, :3])
+        ax_rgb.imshow(np.ma.masked_where(crop[:, :, 3] == 0, crop[:, :, 3]), cmap='gray_r', vmin=0, vmax=1, alpha=0.8)
         ax_rgb.set_title(f"Instance {i}: {title_prefix} RGB")
         ax_rgb.axis("off")
         

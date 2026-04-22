@@ -35,7 +35,7 @@ def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Op
     cols = np.any(inst_mask_2d > 0, axis=0)
     
     if not np.any(rows) or not np.any(cols):
-        return np.zeros((target_size[1], target_size[0], 3), dtype=np.uint8)
+        return np.zeros((target_size[1], target_size[0], 4), dtype=np.uint8)
         
     v_min, v_max = np.where(rows)[0][[0, -1]]
     u_min, u_max = np.where(cols)[0][[0, -1]]
@@ -48,12 +48,24 @@ def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Op
     u2 = min(w, u_max + padding_px)
     
     crop = rgb_image[v1:v2, u1:u2]
+    mask_crop = inst_mask_2d[v1:v2, u1:u2] # Crop the mask alongside the RGB
     
     if crop.size == 0:
-        return np.zeros((target_size[1], target_size[0], 3), dtype=np.uint8)
+        return np.zeros((target_size[1], target_size[0], 4), dtype=np.uint8)
         
-    crop_resized = cv2.resize(crop, target_size)
-    return crop_resized
+    crop_resized = cv2.resize(crop, target_size, interpolation=cv2.INTER_NEAREST)
+    
+    # Resize the mask (using nearest neighbor to avoid interpolation blurring)
+    mask_resized = cv2.resize(mask_crop.astype(np.uint8), target_size, interpolation=cv2.INTER_NEAREST)
+    
+    # Ensure binary format: 1 for instance, 0 otherwise
+    mask_resized = (mask_resized > 0).astype(np.uint8)
+    
+    # Expand dims to (64, 64, 1) and concatenate to create (64, 64, 4)
+    mask_resized = np.expand_dims(mask_resized, axis=-1)
+    crop_4d = np.concatenate([crop_resized, mask_resized], axis=-1)
+    
+    return crop_4d
 
 def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarray):
     """
