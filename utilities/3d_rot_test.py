@@ -2,8 +2,28 @@ import os
 from config import Paths
 import torch
 import numpy as np
+from torch import Tensor
+from typing import Optional
 
 from utilities.utils import extract_3d_bbox_params, reconstruct_box, reorder_original_box
+
+def check_corners_permuation(box_a: Tensor, box_b: Tensor) -> bool:
+    """
+    Checks if both the boxes contain exact corners with possibly different permutation
+    """
+    # Convert tensors to lists of tuples so they are hashable
+    set_a = set(tuple(row) for row in box_a.tolist())
+    set_b= set(tuple(row) for row in box_b.tolist())
+    
+    # Check 1: Are the sets identical? (Order independent)
+    # Check 2: Are the lengths still 8?
+    return (set_a == set_b) and (len(set_a) == 8) and (len(set_b) == 8)
+
+def check_corners_tolerance(box_a: Tensor, box_b: Tensor, atol: Optional[float] = 1e-3) -> bool:
+    """
+    Checks if both the boxes' corners are close enough within some give tolerance
+    """
+    return torch.allclose(box_a, box_b, atol=atol)
 
 if __name__ == "__main__":
     data_path = Paths.data
@@ -40,7 +60,8 @@ if __name__ == "__main__":
             reordered_original_box = reorder_original_box(original_box, reconstructed_box)
             
             # 4. Validation
-            is_match = torch.allclose(reordered_original_box, reconstructed_box, atol=1e-3)
+            is_match = (check_corners_permuation(original_box, reordered_original_box) and
+                check_corners_tolerance(reordered_original_box, reconstructed_box, atol=1e-3))
             
             if not is_match:
                 print(f"Scene {scene_id} | Box {i}: Mismatch!")
