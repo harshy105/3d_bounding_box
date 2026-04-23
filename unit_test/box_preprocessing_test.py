@@ -5,7 +5,7 @@ import numpy as np
 from torch import Tensor
 from typing import Optional
 
-from utilities.utils import extract_3d_bbox_params, reconstruct_box, reorder_original_box
+from utilities.utils import extract_3d_bbox_params, reconstruct_unique_box, reorder_original_box
 
 def have_identical_corner_sets(box_a: Tensor, box_b: Tensor) -> bool:
     """
@@ -54,7 +54,7 @@ if __name__ == "__main__":
             center, dims, rot_6d = extract_3d_bbox_params(original_box)
             
             # 2. Reverse Pass: Reconstruct the box from the parameters
-            reconstructed_box = reconstruct_box(center, dims, rot_6d)
+            reconstructed_box = reconstruct_unique_box(center, dims, rot_6d)
             
             # 3. Align the original box corner sequence to the new canonical box corner sequence
             reordered_original_box = reorder_original_box(original_box, reconstructed_box)

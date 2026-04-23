@@ -128,6 +128,8 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
 def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor]:
     """
     Converts an (8, 3) bounding box into its center, dimensions, and 6D rotation.
+    Generate 6D representation of 3D angles based on
+    Zhou et. al. On the Continuity of Rotation Representations in Neural Networks 
     
     Args:
         box (torch.Tensor): Shape (8, 3), corners ordered consistently.
@@ -187,9 +189,11 @@ def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor]:
     
     return center, dims, rot_6d
 
-def reconstruct_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
+def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
     """
-    Reconstructs the original (8, 3) bounding box from parameters.
+    Reconstructs unique (8, 3) bounding box from parameters.
+    3D rotation is unique and continous as shown in
+    Zhou et. al. On the Continuity of Rotation Representations in Neural Networks 
     
     Args:
         center (torch.Tensor): Shape (3,)
@@ -202,16 +206,13 @@ def reconstruct_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
     w, h, l = dims
     
     # 1. Unpack the 6D representation back into raw X and Y vectors
-    v1_raw = rot_6d[:3]
-    v2_raw = rot_6d[3:]
+    v1 = rot_6d[:3]
+    v2 = rot_6d[3:]
     
-    # 2. Apply Gram-Schmidt Orthogonalization
-    # Normalize X
-    v1 = F.normalize(v1_raw, dim=0)
-    
-    # Make Y orthogonal to X, then normalize
-    v2_proj = v2_raw - torch.dot(v2_raw, v1) * v1
-    v2 = F.normalize(v2_proj, dim=0)
+    # 2. Check the if 6D representation of 3D rotation is correct
+    assert abs(torch.norm(v1) - 1.0) < 1e-5, "Roll axis (X) is not normalized"
+    assert abs(torch.norm(v2) - 1.0) < 1e-5, "Pitch axis (Y) is not normalized"
+    assert abs(torch.dot(v1, v2)) < 1e-5,  "Roll (X) and Pitch (Y) axis are not orthogonal"
     
     # 3. Mathematically enforce the Z axis via Cross Product (Right-Hand Rule)
     # This guarantees the determinant is +1 and prevents mirrored boxes

@@ -13,7 +13,7 @@ import warnings
 from config import Paths
 from config import data_loader_config
 from utilities.utils import (extract_3d_bbox_params, augment_instance, 
-                             reconstruct_box, reorder_original_box)
+                             reconstruct_unique_box, reorder_original_box)
 from utilities.plotting import draw_bboxes_on_image, plot_instance
 from unit_test.box_preprocessing_test import (have_identical_corner_sets, 
                                               are_corners_close)
@@ -80,7 +80,7 @@ class LMDBInstanceDataset(Dataset):
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
         # Generate a unique bounding box given the bouning box parameters
-        reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
+        reconstructed_box = reconstruct_unique_box(bbox_center, bbox_dims, bbox_rot_6d)
         # reorder original box corners based on the reconstructed box
         reordered_bbox_tensor = reorder_original_box(bbox_tensor, reconstructed_box)
         assert have_identical_corner_sets(reordered_bbox_tensor, bbox_tensor), \
