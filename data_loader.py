@@ -148,24 +148,35 @@ class InstanceDataModule(LightningDataModule):
         self.num_workers = data_loader_config.num_workers
         self.apply_aug = data_loader_config.apply_aug
         self.shuffle = data_loader_config.shuffle
-        self.persistent_workers = data_loader_config.persistent_workers
+        self.use_persistent =  data_loader_config.persistent_workers if self.num_workers > 0 else False
         self.config = data_loader_config
 
     def setup(self, stage=None) -> None:
         self.train_dataset = LMDBInstanceDataset(os.path.join(self.lmdb_path, "train"), 
-                                    data_loader_config=self.config, apply_aug=self.apply_aug, 
-                                    persistent_workers=True) # better speed
+                                        data_loader_config=self.config, apply_aug=self.apply_aug)
         self.val_dataset = LMDBInstanceDataset(os.path.join(self.lmdb_path, "val"), 
-                                    data_loader_config=self.config, apply_aug=False,
-                                    persistent_workers=True)
+                                        data_loader_config=self.config, apply_aug=False)
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, 
-                          shuffle=self.shuffle, num_workers=self.num_workers)
+        return DataLoader(
+            self.train_dataset, 
+            batch_size=self.batch_size, 
+            shuffle=self.shuffle, 
+            num_workers=self.num_workers,
+            drop_last=True, # for Batchnorm issues 
+            persistent_workers=self.use_persistent
+        )
 
     def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, 
-                          shuffle=False, num_workers=self.num_workers)
+        
+        
+        return DataLoader(
+            self.val_dataset, 
+            batch_size=self.batch_size, 
+            shuffle=False, 
+            num_workers=self.num_workers,
+            persistent_workers=self.use_persistent
+        )
 
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic

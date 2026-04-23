@@ -176,7 +176,7 @@ def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor]:
     
     # Mathematically forge Y. In RHS: Z cross X = Y.
     # This guarantees the box doesn't flip inside out, and perfectly defines the middle edge.
-    y_dir = torch.cross(z_dir, x_dir)
+    y_dir = torch.cross(z_dir, x_dir, dim=0)
     
     # 6. Assign Dimensions based on our new axes
     w = torch.norm(canonical_x)  # Width corresponds to X (Longest)
@@ -196,49 +196,62 @@ def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tens
     Zhou et. al. On the Continuity of Rotation Representations in Neural Networks 
     
     Args:
-        center (torch.Tensor): Shape (3,)
-        dims (torch.Tensor): Shape (3,) -> [Width, Height, Length]
-        rot_6d (torch.Tensor): Shape (6,)
+        center (torch.Tensor): Shape (3,) or (B, 3)
+        dims (torch.Tensor): Shape (3,) or (B, 3) -> [Width, Height, Length]
+        rot_6d (torch.Tensor): Shape (6,) or or (B, 6)
         
     Returns:
-        box (torch.Tensor): Shape (8, 3), reconstructed bounding box
+        box (torch.Tensor): Shape (8, 3) or (B, 8, 3), reconstructed bounding box
     """
-    w, h, l = dims
-    
+    # 0. Automatically handle batched vs unbatched inputs
+    is_batched = center.dim() == 2
+    if not is_batched:
+        center = center.unsqueeze(0)
+        dims = dims.unsqueeze(0)
+        rot_6d = rot_6d.unsqueeze(0)
+        
+    B = center.shape[0]
+
     # 1. Unpack the 6D representation back into raw X and Y vectors
-    v1_raw = rot_6d[:3]
-    v2_raw = rot_6d[3:]
-    
+    v1_raw = rot_6d[:, :3]
+    v2_raw = rot_6d[:, 3:]
+
     # 2. Apply Gram-Schmidt Orthogonalization
     # Normalize X
-    v1 = F.normalize(v1_raw, dim=0)
+    v1 = F.normalize(v1_raw, dim=1)
     
     # Make Y orthogonal to X, then normalize
-    v2_proj = v2_raw - torch.dot(v2_raw, v1) * v1
-    v2 = F.normalize(v2_proj, dim=0)
+    dot_product = torch.sum(v2_raw * v1, dim=1, keepdim=True)
+    v2_proj = v2_raw - (dot_product * v1)
+    v2 = F.normalize(v2_proj, dim=1)
+
+    # 3. Mathematically enforce the Z axis via Cross Product
+    v3 = torch.cross(v1, v2, dim=1)
+
+    # 4. Build the 3x3 Rotation Matrix (v1, v2, v3 as columns)
+    R = torch.stack([v1, v2, v3], dim=2) # Shape: (B, 3, 3)
+
+    # 5. Define the 8 corners in local space based on dims (w, h, l)
+    w, h, l = dims[:, 0:1], dims[:, 1:2], dims[:, 2:3]
     
-    # 3. Mathematically enforce the Z axis via Cross Product (Right-Hand Rule)
-    # This guarantees the determinant is +1 and prevents mirrored boxes
-    v3 = torch.cross(v1, v2)
+    x_coords = torch.cat([-w/2,  w/2,  w/2, -w/2, -w/2,  w/2,  w/2, -w/2], dim=1)
+    y_coords = torch.cat([-h/2, -h/2, -h/2, -h/2,  h/2,  h/2,  h/2,  h/2], dim=1)
+    z_coords = torch.cat([-l/2, -l/2,  l/2,  l/2, -l/2, -l/2,  l/2,  l/2], dim=1)
+
     
-    # 4. Build the 3x3 Rotation Matrix
-    R = torch.stack([v1, v2, v3], dim=1)
-    
-    # 5. Define the 8 corners in local space (centered at origin, 0 rotation)
-    # The order MUST match the assumptions made in the forward function
-    x_coords = torch.tensor([-w/2,  w/2,  w/2, -w/2, -w/2,  w/2,  w/2, -w/2])
-    y_coords = torch.tensor([-h/2, -h/2, -h/2, -h/2,  h/2,  h/2,  h/2,  h/2])
-    z_coords = torch.tensor([-l/2, -l/2,  l/2,  l/2, -l/2, -l/2,  l/2,  l/2])
-    
-    local_corners = torch.stack([x_coords, y_coords, z_coords], dim=1) # Shape (8, 3)
-    
+    local_corners = torch.stack([x_coords, y_coords, z_coords], dim=2) # Shape: (B, 8, 3)
+
     # 6. Apply Rotation and Translation
-    # Rotate: local_corners @ R.T (Matrix multiplication)
-    rotated_corners = torch.matmul(local_corners, R.t())
+    # Batched matrix multiplication: (B, 8, 3) @ (B, 3, 3) -> (B, 8, 3)
+    rotated_corners = torch.bmm(local_corners, R.transpose(1, 2))
     
-    # Translate to center
-    box = rotated_corners + center
-    
+    # Translate to center: (B, 8, 3) + (B, 1, 3)
+    box = rotated_corners + center.unsqueeze(1)
+
+    # Return original shape if it wasn't batched
+    if not is_batched:
+        box = box.squeeze(0)
+        
     return box
 
 def reorder_original_box(original_box: Tensor, reconstructed_box: Tensor) -> Tensor:
