@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
-    from config import data_loader_config
+    from config import DataLoaderConfig
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -21,7 +21,7 @@ from unit_test.box_preprocessing_test import (have_identical_corner_sets,
                                               are_corners_close)
 
 class LMDBInstanceDataset(Dataset):
-    def __init__(self, lmdb_path: str, data_loader_config: data_loader_config, 
+    def __init__(self, lmdb_path: str, data_loader_config: DataLoaderConfig, 
                  apply_aug: bool = False, vis_sample: bool = False) -> None:
         self.lmdb_path = lmdb_path
         self.apply_aug = apply_aug
@@ -141,7 +141,7 @@ class LMDBInstanceDataset(Dataset):
 
 
 class InstanceDataModule(LightningDataModule):
-    def __init__(self, parsed_data_path: str, data_loader_config: data_loader_config) -> None:
+    def __init__(self, parsed_data_path: str, data_loader_config: DataLoaderConfig) -> None:
         super().__init__()
         self.lmdb_path = parsed_data_path
         self.batch_size = data_loader_config.batch_size
@@ -170,10 +170,10 @@ class InstanceDataModule(LightningDataModule):
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic
     from config import Paths
-    from config import data_loader_config
+    from config import DataLoaderConfig
     split = "val"
-    dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=data_loader_config,
-                                  apply_aug=False, vis_sample=True)
+    dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=DataLoaderConfig,
+                                  apply_aug=True, vis_sample=True)
     
     # Check if the dataset contains any samples before starting
     if len(dataset) == 0:

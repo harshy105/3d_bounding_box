@@ -8,7 +8,7 @@ import warnings
 from tqdm import tqdm
 
 from config import Paths
-from config import data_preprocessing
+from config import DataPreprocessingConfig
 from utilities.utils import get_rgb_crop
 
 if __name__ == "__main__":
@@ -91,7 +91,7 @@ if __name__ == "__main__":
             bbox_3d = bbox[i]
             
             # Extract image crop (64, 64, 4), 4th is the mask
-            img_crop = get_rgb_crop(img, inst_mask_2d, target_size=data_preprocessing.crop_img_size)
+            img_crop = get_rgb_crop(img, inst_mask_2d, target_size=DataPreprocessingConfig.crop_img_size)
             
             # Package the parsed data
             sample = {
