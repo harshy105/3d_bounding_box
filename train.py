@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 import torch
 from torch.optim import AdamW
 
-from network.net import InstanceVoteNet
+from network.modules import InstanceVoteNet
 from network.loss import InstanceBoxLoss
 
 
