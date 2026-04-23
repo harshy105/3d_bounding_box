@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Ensure the target directory for LMDB exists
     os.makedirs(parsed_data_path, exist_ok=True)
     
-    # Define LMDB map size (set to 10GB here, adjust if your dataset is larger)
+    # Define LMDB map size
     map_size = int(1e9)
     
     # Initialize the LMDB environment

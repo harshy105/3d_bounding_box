@@ -139,8 +139,6 @@ class InstanceDataModule(LightningDataModule):
         self.apply_aug = apply_aug
 
     def setup(self, stage=None) -> None:
-        # In a real scenario, you'd split your LMDB into train/val here.
-        # For now, we wrap the whole parsed data.
         self.train_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=self.apply_aug)
         self.val_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=False)
 

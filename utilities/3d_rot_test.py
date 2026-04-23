@@ -6,7 +6,6 @@ import numpy as np
 from utilities.utils import extract_3d_bbox_params, reconstruct_box
 
 if __name__ == "__main__":
-    # Assuming Paths.data is defined in your environment
     data_path = Paths.data
     
     # Flag to track if the entire dataset passes
