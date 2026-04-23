@@ -1,5 +1,9 @@
-from network.trainer import TrainerLitModule
+import torch
 from pytorch_lightning import Trainer
+
+torch.set_float32_matmul_precision('medium') # for speed up GPU with Tensor cores
+
+from network.trainer import TrainerLitModule
 from config import Paths, DataLoaderConfig, NetConfig, TrainConfig
 from data_loader import InstanceDataModule
 
