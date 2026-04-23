@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict
+from tqdm import tqdm 
 
 from config import Paths
 from config import data_loader_config
@@ -101,9 +102,8 @@ class LMDBInstanceDataset(Dataset):
         
         # Validation Check
         is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
-        print(f"Sample: {sample['key']}")
-        print(f"Reconstruction Match (atol=1e-3): {is_match}")
         if not is_match:
+            print(f"Sample: {sample['key']}")
             print(f"Max Diff: {torch.max(torch.abs(original_box - reconstructed_box))}")
 
         # Plotting Setup
@@ -162,5 +162,5 @@ if __name__ == "__main__":
         print("Dataset is empty. Please check the LMDB path.")
     else:
         # Loop through every sample in the dataset for debugging and reconstruction verification
-        for idx in range(len(dataset)):
+        for idx in tqdm(range(len(dataset))):
             dataset.visualize_debug_sample(idx)

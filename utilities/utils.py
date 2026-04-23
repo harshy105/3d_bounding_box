@@ -115,6 +115,13 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
         img_aug = cv2.flip(img_aug, 1) 
         pts_aug[:, 0] = -pts_aug[:, 0]
         box_aug[:, 0] = -box_aug[:, 0]
+        
+        # --- Reorder the corners to maintain orientation ---
+        # [0,1,2,3] is the bottom ring, [4,5,6,7] is the top ring.
+        # Left/Right pairs: (0,1), (3,2), (4,5), (7,6)
+        
+        swap_indices = [1, 0, 3, 2, 5, 4, 7, 6] 
+        box_aug = box_aug[swap_indices]
 
     return pts_aug, box_aug, img_aug
 
