@@ -79,12 +79,15 @@ class LMDBInstanceDataset(Dataset):
         #  box corner sequence so that the neural network can learn in a stable manner
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
+        # Generate a unique bounding box given the bouning box parameters
         reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
+        # reorder original box corners based on the reconstructed box
         reordered_bbox_tensor = reorder_original_box(bbox_tensor, reconstructed_box)
         assert have_identical_corner_sets(reordered_bbox_tensor, bbox_tensor), \
             f"Reordered box is not same as original box in Sample {self.keys[idx]}"
+        # Test whether the unique reconstructed box is acutally same as the some permuation of original box
         assert are_corners_close(reordered_bbox_tensor, reconstructed_box, atol=1e-3), \
-            f"Reconstruction of the box is not correct in Sample {self.keys[idx]}"
+            f"Reconstruction of the box is not 1-to-1 map Sample {self.keys[idx]}"
         
         sample = {
             "img_crop": img_tensor,
@@ -158,7 +161,7 @@ class InstanceDataModule(LightningDataModule):
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic
     dataset = LMDBInstanceDataset(Paths.parsed_data, data_loader_config=data_loader_config,
-                                  apply_aug=True, vis_sample=True)
+                                  apply_aug=False, vis_sample=True)
     
     # Check if the dataset contains any samples before starting
     if len(dataset) == 0:
