@@ -206,13 +206,16 @@ def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tens
     w, h, l = dims
     
     # 1. Unpack the 6D representation back into raw X and Y vectors
-    v1 = rot_6d[:3]
-    v2 = rot_6d[3:]
+    v1_raw = rot_6d[:3]
+    v2_raw = rot_6d[3:]
     
-    # 2. Check the if 6D representation of 3D rotation is correct
-    assert abs(torch.norm(v1) - 1.0) < 1e-5, "Roll axis (X) is not normalized"
-    assert abs(torch.norm(v2) - 1.0) < 1e-5, "Pitch axis (Y) is not normalized"
-    assert abs(torch.dot(v1, v2)) < 1e-5,  "Roll (X) and Pitch (Y) axis are not orthogonal"
+    # 2. Apply Gram-Schmidt Orthogonalization
+    # Normalize X
+    v1 = F.normalize(v1_raw, dim=0)
+    
+    # Make Y orthogonal to X, then normalize
+    v2_proj = v2_raw - torch.dot(v2_raw, v1) * v1
+    v2 = F.normalize(v2_proj, dim=0)
     
     # 3. Mathematically enforce the Z axis via Cross Product (Right-Hand Rule)
     # This guarantees the determinant is +1 and prevents mirrored boxes
