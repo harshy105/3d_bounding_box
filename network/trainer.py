@@ -9,7 +9,7 @@ from torch.optim import AdamW
 from network.modules import InstanceVoteNet
 from network.loss import InstanceBoxLoss
 
-class Net(pl.LightningModule):
+class TrainerLitModule(pl.LightningModule):
     def __init__(self, net_config: NetConfig, train_config: TrainConfig):
         super().__init__()
         self.save_hyperparameters()

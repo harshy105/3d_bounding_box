@@ -1,4 +1,4 @@
-from network.net import Net
+from network.trainer import TrainerLitModule
 from pytorch_lightning import Trainer
 from config import Paths, DataLoaderConfig, NetConfig, TrainConfig
 from data_loader import InstanceDataModule
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     )
     
     # 3. Initialize the Lightning Module
-    model = Net(net_cfg, train_cfg)
+    model = TrainerLitModule(net_cfg, train_cfg)
     
     # 4. Initialize Trainer and start training
     trainer = Trainer(
