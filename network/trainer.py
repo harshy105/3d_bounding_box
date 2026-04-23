@@ -40,14 +40,14 @@ class TrainerLitModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, loss_dict = self.shared_step(batch, batch_idx)
-        
-        # Grab the batch size explicitly from any tensor in the dictionary
         current_batch_size = batch["pc_pts"].shape[0]
         
-        # Pass it into the log function
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=current_batch_size)
+        # Log overall loss (Epoch only)
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=current_batch_size)
+        
+        # Log individual loss components
         for k, v in loss_dict.items():
-            self.log(f"train_{k}", v, on_epoch=True, batch_size=current_batch_size)
+            self.log(f"train_{k}", v, on_step=False, on_epoch=True, batch_size=current_batch_size)
             
         return loss
 
@@ -55,9 +55,12 @@ class TrainerLitModule(pl.LightningModule):
         loss, loss_dict = self.shared_step(batch, batch_idx)
         current_batch_size = batch["pc_pts"].shape[0]
         
-        self.log("val_loss", loss, prog_bar=True, batch_size=current_batch_size)
+        # Log overall loss (Epoch only)
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=current_batch_size)
+        
+        # Log individual loss components
         for k, v in loss_dict.items():
-            self.log(f"val_{k}", v, batch_size=current_batch_size)
+            self.log(f"val_{k}", v, on_step=False, on_epoch=True, batch_size=current_batch_size)
             
         return loss
 

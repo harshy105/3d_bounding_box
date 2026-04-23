@@ -29,6 +29,6 @@ class InstanceBoxLoss(nn.Module):
                      (self.w_r * loss_r) + (self.w_corner * loss_corner)
                      
         return total_loss, {
-            "loss_c": loss_c.item(), "loss_s": loss_s.item(), 
-            "loss_r": loss_r.item(), "loss_corner": loss_corner.item()
+            "loss_center": loss_c.item(), "loss_dims": loss_s.item(), 
+            "loss_rot": loss_r.item(), "loss_corner": loss_corner.item()
         }
