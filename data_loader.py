@@ -5,8 +5,10 @@ import lmdb
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Dict
+from typing import Dict, Optional
+from torch import Tensor
 from tqdm import tqdm 
+import warnings
 
 from config import Paths
 from config import data_loader_config
@@ -15,11 +17,12 @@ from utilities.plotting import draw_bboxes_on_image, plot_instance
 
 class LMDBInstanceDataset(Dataset):
     def __init__(self, lmdb_path: str, data_loader_config: data_loader_config, 
-                 apply_aug: bool = False) -> None:
+                 apply_aug: bool = False, vis_sample: bool = False) -> None:
         self.lmdb_path = lmdb_path
         self.apply_aug = apply_aug
         self.num_points = data_loader_config.max_number_pc_pts
         self.env = None
+        self.vis_sample = vis_sample
         
         # Open environment once just to extract the keys, then close it. 
         # This prevents multiprocessing crashes with PyTorch workers.
@@ -43,9 +46,9 @@ class LMDBInstanceDataset(Dataset):
             byteflow = txn.get(self.keys[idx])
             sample = pickle.loads(byteflow)
             
-        return self.process_sample(sample)
+        return self.process_sample(idx, sample)
             
-    def process_sample(self, sample: Dict) -> Dict:            
+    def process_sample(self, idx: int, sample: Dict) -> Dict:            
         pc_pts = sample["pc_pts"]
         bbox_3d = sample["bbox_3d"]
         img_crop = sample["img_crop"]
@@ -73,7 +76,7 @@ class LMDBInstanceDataset(Dataset):
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
         
-        return {
+        sample = {
             "img_crop": img_tensor,
             "pc_pts": pc_tensor,
             "bbox_3d": bbox_tensor,
@@ -82,29 +85,35 @@ class LMDBInstanceDataset(Dataset):
             "bbox_rot_6d": bbox_rot_6d,
             "key": self.keys[idx].decode('ascii')
         }
-
-    def visualize_debug_sample(self, idx: int) -> None:
-        """
-        5. Visualizes a sample to debug the extraction and reconstruction pipeline.
-        """
-        sample = self[idx]
         
-        img_tensor = sample["img_crop"]
-        pc_tensor = sample["pc_pts"]
+        # 5. Run tests on the sample and visualize
+        reconstructed_box = self.test_reconstruction(sample)
+        if self.vis_sample:
+            self.visualize_sample(sample, reconstructed_box)
+        
+        return sample
+        
+    def test_reconstruction(self, sample: Dict) -> Tensor:
         original_box = sample["bbox_3d"]
         bbox_center = sample["bbox_center"]
         bbox_dims = sample["bbox_dims"]
         bbox_rot_6d = sample["bbox_rot_6d"]
+        key = sample["key"]
         
         # Reconstruct the box from the extracted parameters
-        # (Unpack params according to what extract_3d_bbox_params returns)
         reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
         
         # Validation Check
         is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
         if not is_match:
-            print(f"Sample: {sample['key']}")
-            print(f"Max Diff: {torch.max(torch.abs(original_box - reconstructed_box))}")
+            warnings.warn(f"BBox not constructed correctly in Sample: {key}")
+            warnings.warn(f"Max Diff: {torch.max(torch.abs(original_box - reconstructed_box))}")
+            
+        return reconstructed_box
+
+    def visualize_sample(self, sample: Dict, reconstructed_box: Optional[Tensor] = None) -> None:
+        img_tensor = sample["img_crop"]
+        pc_tensor = sample["pc_pts"]
 
         # Plotting Setup
         fig = plt.figure(figsize=(12, 5))
@@ -122,8 +131,13 @@ class LMDBInstanceDataset(Dataset):
         
         # Plot 3D Point Cloud and the RECONSTRUCTED box
         ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
-        plot_instance(pc_pts=pc_tensor.numpy(), bbox_3d=reconstructed_box.numpy(), ax=ax_3d)
-        ax_3d.set_title("3D Point Cloud & Reconstructed Box")
+        if reconstructed_box is not None:
+            plot_instance(pc_pts=pc_tensor.numpy(), bbox_3d=reconstructed_box.numpy(), ax=ax_3d)
+            ax_3d.set_title("3D Point Cloud & Reconstructed Box")
+        else:
+            original_box = sample["bbox_3d"]
+            plot_instance(pc_pts=pc_tensor.numpy(), bbox_3d=original_box.numpy(), ax=ax_3d)
+            ax_3d.set_title("3D Point Cloud & Original Box")
         
         plt.tight_layout()
         plt.show()
@@ -153,12 +167,12 @@ class InstanceDataModule(LightningDataModule):
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic
     dataset = LMDBInstanceDataset(Paths.parsed_data, data_loader_config=data_loader_config,
-                                  apply_aug=True)
+                                  apply_aug=True, vis_sample=True)
     
     # Check if the dataset contains any samples before starting
     if len(dataset) == 0:
         print("Dataset is empty. Please check the LMDB path.")
     else:
         # Loop through every sample in the dataset for debugging and reconstruction verification
-        for idx in tqdm(range(len(dataset))):
-            dataset.visualize_debug_sample(idx)
+        for sample in tqdm(dataset):
+            pass
