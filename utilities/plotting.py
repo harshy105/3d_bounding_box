@@ -79,11 +79,13 @@ def plot_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray,
         ax = fig.add_subplot(111, projection="3d")
 
     # Plot object points (subsampled for speed)
-    if len(pc_pts) > 2000:
-        idx = np.random.choice(len(pc_pts), 2000, replace=False)
-        pts = pc_pts[idx]
+    non_zero_mask = np.any(pc_pts != 0, axis=1)
+    valid_pts = pc_pts[non_zero_mask]
+    if len(valid_pts) > 2000:
+        idx = np.random.choice(len(valid_pts), 2000, replace=False)
+        pts = valid_pts[idx]
     else:
-        pts = pc_pts
+        pts = valid_pts
 
     if len(pts) > 0:
         ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, c="blue", alpha=0.5)

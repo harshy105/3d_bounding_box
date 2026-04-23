@@ -12,4 +12,4 @@ class data_preprocessing:
     
 @dataclass
 class data_loader_config:
-    max_number_pc_pts: int = 1024
+    max_number_pc_pts: int = int(4e4)

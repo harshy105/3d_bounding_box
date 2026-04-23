@@ -53,13 +53,16 @@ class LMDBInstanceDataset(Dataset):
         if self.apply_aug:
             pc_pts, bbox_3d, img_crop = augment_instance(pc_pts, bbox_3d, img_crop)
             
-        # 2. Ensure uniform point cloud size for batching (Subsample or Pad)
+        # 2. Ensure uniform point cloud size for batching (Subsample or Zero-Pad)
         num_current_pts = pc_pts.shape[0]
         if num_current_pts >= self.num_points:
             choice = np.random.choice(num_current_pts, self.num_points, replace=False)
+            pc_pts = pc_pts[choice, :]
         else:
-            choice = np.random.choice(num_current_pts, self.num_points, replace=True)
-        pc_pts = pc_pts[choice, :]
+            pad_size = self.num_points - num_current_pts
+            zero_padding = np.zeros((pad_size, *pc_pts.shape[1:]), dtype=pc_pts.dtype)
+            pc_pts = np.concatenate((pc_pts, zero_padding), axis=0)
+        
         pc_tensor = torch.from_numpy(pc_pts).float()
 
         # 3. Convert image to Torch and permute to (Channels, Height, Width) format
