@@ -12,8 +12,11 @@ import warnings
 
 from config import Paths
 from config import data_loader_config
-from utilities.utils import extract_3d_bbox_params, augment_instance, reconstruct_box
+from utilities.utils import (extract_3d_bbox_params, augment_instance, 
+                             reconstruct_box, reorder_original_box)
 from utilities.plotting import draw_bboxes_on_image, plot_instance
+from unit_test.box_preprocessing_test import (have_identical_corner_sets, 
+                                              are_corners_close)
 
 class LMDBInstanceDataset(Dataset):
     def __init__(self, lmdb_path: str, data_loader_config: data_loader_config, 
@@ -72,14 +75,21 @@ class LMDBInstanceDataset(Dataset):
         # 3. Convert image to Torch and permute to (Channels, Height, Width) format
         img_tensor = torch.from_numpy(img_crop).permute(2, 0, 1).float() / 255.0
         
-        # 4. Extract features from the 3D bounding box
+        # 4. Extract canonical features from the 3D bounding box and reorder the bounding
+        #  box corner sequence so that the neural network can learn in a stable manner
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
+        reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
+        reordered_bbox_tensor = reorder_original_box(bbox_tensor, reconstructed_box)
+        assert have_identical_corner_sets(reordered_bbox_tensor, bbox_tensor), \
+            f"Reordered box is not same as original box in Sample {self.keys[idx]}"
+        assert are_corners_close(reordered_bbox_tensor, reconstructed_box, atol=1e-3), \
+            f"Reconstruction of the box is not correct in Sample {self.keys[idx]}"
         
         sample = {
             "img_crop": img_tensor,
             "pc_pts": pc_tensor,
-            "bbox_3d": bbox_tensor,
+            "bbox_3d": reordered_bbox_tensor,
             "bbox_center": bbox_center,
             "bbox_dims": bbox_dims,
             "bbox_rot_6d": bbox_rot_6d,
@@ -87,29 +97,10 @@ class LMDBInstanceDataset(Dataset):
         }
         
         # 5. Run tests on the sample and visualize
-        reconstructed_box = self.test_reconstruction(sample)
         if self.vis_sample:
-            self.visualize_sample(sample, reconstructed_box)
+            self.visualize_sample(sample, reordered_bbox_tensor)
         
         return sample
-        
-    def test_reconstruction(self, sample: Dict) -> Tensor:
-        original_box = sample["bbox_3d"]
-        bbox_center = sample["bbox_center"]
-        bbox_dims = sample["bbox_dims"]
-        bbox_rot_6d = sample["bbox_rot_6d"]
-        key = sample["key"]
-        
-        # Reconstruct the box from the extracted parameters
-        reconstructed_box = reconstruct_box(bbox_center, bbox_dims, bbox_rot_6d)
-        
-        # Validation Check
-        is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
-        if not is_match:
-            warnings.warn(f"BBox not constructed correctly in Sample: {key}")
-            warnings.warn(f"Max Diff: {torch.max(torch.abs(original_box - reconstructed_box))}")
-            
-        return reconstructed_box
 
     def visualize_sample(self, sample: Dict, reconstructed_box: Optional[Tensor] = None) -> None:
         img_tensor = sample["img_crop"]
