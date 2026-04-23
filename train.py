@@ -21,7 +21,8 @@ if __name__ == "__main__":
     # 4. Initialize Trainer and start training
     trainer = Trainer(
         max_epochs=train_cfg.max_epochs, 
-        accelerator="auto"
+        accelerator="auto",
+        log_every_n_steps=10
     )
     
     print("Starting training...")
