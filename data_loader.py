@@ -1,3 +1,8 @@
+from __future__ import annotations
+from typing import Dict, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from config import data_loader_config
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningDataModule
@@ -5,13 +10,10 @@ import lmdb
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Dict, Optional
 from torch import Tensor
 from tqdm import tqdm 
-import warnings
+import os
 
-from config import Paths
-from config import data_loader_config
 from utilities.utils import (extract_3d_bbox_params, augment_instance, 
                              reconstruct_unique_box, reorder_original_box)
 from utilities.plotting import draw_bboxes_on_image, plot_instance
@@ -139,20 +141,27 @@ class LMDBInstanceDataset(Dataset):
 
 
 class InstanceDataModule(LightningDataModule):
-    def __init__(self, batch_size: int = 32, num_workers: int = 4, apply_aug: bool = True) -> None:
+    def __init__(self, parsed_data_path: str, data_loader_config: data_loader_config) -> None:
         super().__init__()
-        self.lmdb_path = Paths.parsed_data
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.apply_aug = apply_aug
+        self.lmdb_path = parsed_data_path
+        self.batch_size = data_loader_config.batch_size
+        self.num_workers = data_loader_config.num_workers
+        self.apply_aug = data_loader_config.apply_aug
+        self.shuffle = data_loader_config.shuffle
+        self.persistent_workers = data_loader_config.persistent_workers
+        self.config = data_loader_config
 
     def setup(self, stage=None) -> None:
-        self.train_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=self.apply_aug)
-        self.val_dataset = LMDBInstanceDataset(self.lmdb_path, apply_aug=False)
+        self.train_dataset = LMDBInstanceDataset(os.path.join(self.lmdb_path, "train"), 
+                                    data_loader_config=self.config, apply_aug=self.apply_aug, 
+                                    persistent_workers=True) # better speed
+        self.val_dataset = LMDBInstanceDataset(os.path.join(self.lmdb_path, "val"), 
+                                    data_loader_config=self.config, apply_aug=False,
+                                    persistent_workers=True)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(self.train_dataset, batch_size=self.batch_size, 
-                          shuffle=True, num_workers=self.num_workers, drop_last=True)
+                          shuffle=self.shuffle, num_workers=self.num_workers)
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(self.val_dataset, batch_size=self.batch_size, 
@@ -160,7 +169,10 @@ class InstanceDataModule(LightningDataModule):
 
 if __name__ == "__main__":
     # Test the Dataset and the Validation logic
-    dataset = LMDBInstanceDataset(Paths.parsed_data, data_loader_config=data_loader_config,
+    from config import Paths
+    from config import data_loader_config
+    split = "val"
+    dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=data_loader_config,
                                   apply_aug=False, vis_sample=True)
     
     # Check if the dataset contains any samples before starting
