@@ -5,6 +5,8 @@ from typing import Tuple
 class Paths:
     data: str = "/mnt/c/d/3d_bb_data/raw"
     parsed_data: str = "/mnt/c/d/3d_bb_data/processed"
+    ckpts: str = "/mnt/c/d/3d_bb_ckpts_n_logs/ckpts"
+    logs: str = "/mnt/c/d/3d_bb_ckpts_n_logs/logs"
 
 @dataclass
 class DataPreprocessingConfig:
