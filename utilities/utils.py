@@ -137,32 +137,53 @@ def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor]:
         dims (torch.Tensor): Shape (3,) -> [Width, Height, Length]
         rot_6d (torch.Tensor): Shape (6,) -> Continuous 6D rotation representation
     """
-    # 1. Center is the mean of all 8 points
+    # 1. Extract center and raw vectors using strict RHS indices
     center = box.mean(dim=0)
+    vec_1 = box[1] - box[0] 
+    vec_2 = box[4] - box[0] 
+    vec_3 = box[1] - box[2] 
     
-    # 2. Extract edge vectors based on strict corner indices
-    # Right (X-axis): Vector from Front-Left-Bottom (0) to Front-Right-Bottom (1)
-    vec_x = box[1] - box[0] 
+    vectors = [vec_1, vec_2, vec_3]
+    lengths = [torch.norm(v) for v in vectors]
     
-    # Up (Y-axis): Vector from Front-Left-Bottom (0) to Front-Left-Top (4)
-    vec_y = box[4] - box[0] 
+    # 2. Sort by length to identify physical features
+    sorted_indices = torch.argsort(torch.tensor(lengths)) 
     
-    # Forward (Z-axis): Vector from Back-Right-Bottom (2) to Front-Right-Bottom (1)
-    vec_z = box[1] - box[2] 
+    vec_short = vectors[sorted_indices[0]]
+    vec_mid = vectors[sorted_indices[1]]
+    vec_long = vectors[sorted_indices[2]]
     
-    # 3. Compute dimensions (edge lengths)
-    w = torch.norm(vec_x)
-    h = torch.norm(vec_y)
-    l = torch.norm(vec_z)
+    # 3. Apply Planar Rules ("Thin along Z")
+    canonical_z = vec_short # Thickness becomes Z
+    canonical_x = vec_long  # Primary length becomes X
+    
+    # 4. Remove 180-degree Ambiguities (Anchor the vectors)
+    # Force the thickness normal (Z) to generally point "Up" in the global world
+    # Assuming global Z is your depth/up axis. Adjust index [2] if your global Up is Y [1]
+    if canonical_z[2] < 0: 
+        canonical_z = -canonical_z
+        
+    # Force the main heading (X) to always point into the positive X hemisphere
+    if canonical_x[0] < 0:
+        canonical_x = -canonical_x
+
+    # 5. Enforce strict Right-Hand System (RHS)
+    # Normalize our locked X and Z directions
+    x_dir = canonical_x / torch.norm(canonical_x)
+    z_dir = canonical_z / torch.norm(canonical_z)
+    
+    # Mathematically forge Y. In RHS: Z cross X = Y.
+    # This guarantees the box doesn't flip inside out, and perfectly defines the middle edge.
+    y_dir = torch.cross(z_dir, x_dir)
+    
+    # 6. Assign Dimensions based on our new axes
+    w = torch.norm(canonical_x)  # Width corresponds to X (Longest)
+    h = torch.norm(vec_mid)      # Height corresponds to Y (Derived)
+    l = torch.norm(canonical_z)  # Length corresponds to Z (Shortest / Thickness)
     dims = torch.stack([w, h, l])
     
-    # 4. Create orthonormal basis vectors (X and Y)
-    # We only need the first two columns for the 6D representation
-    v1 = vec_x / w
-    v2 = vec_y / h
-    
-    # Flatten the two 3D vectors into a single 6D vector
-    rot_6d = torch.cat([v1, v2], dim=0)
+    # 7. Create the 6D output (Requires X and Y vectors)
+    rot_6d = torch.cat([x_dir, y_dir], dim=0)
     
     return center, dims, rot_6d
 
@@ -215,3 +236,29 @@ def reconstruct_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
     box = rotated_corners + center
     
     return box
+
+def reorder_original_box(original_box: Tensor, reconstructed_box: Tensor) -> Tensor:
+    """
+    Reorders the corners of the original bounding box to perfectly align 
+    with the sequence of the reconstructed bounding box based on minimum spatial distance.
+    
+    Args:
+        original_box (torch.Tensor): Shape (8, 3), the unordered original corners.
+        reconstructed_box (torch.Tensor): Shape (8, 3), the canonical reconstructed corners.
+        
+    Returns:
+        reordered_box (torch.Tensor): Shape (8, 3), the original box physically sorted 
+                                      to match the reconstructed box's order.
+    """
+    # Computes the distance from every point in the Reconstructed Box 
+    # to every point in the Original Box. Output shape: (8, 8)
+    dists = torch.cdist(reconstructed_box, original_box)
+    
+    # For each point in the reconstructed box (dim 0), find the index of the 
+    # physically closest point in the original box (dim 1)
+    closest_indices = torch.argmin(dists, dim=1)
+    
+    # Reindex the original box using the matched assignments
+    reordered_box = original_box[closest_indices]
+    
+    return reordered_box

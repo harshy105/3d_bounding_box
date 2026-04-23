@@ -3,7 +3,7 @@ from config import Paths
 import torch
 import numpy as np
 
-from utilities.utils import extract_3d_bbox_params, reconstruct_box
+from utilities.utils import extract_3d_bbox_params, reconstruct_box, reorder_original_box
 
 if __name__ == "__main__":
     data_path = Paths.data
@@ -36,15 +36,16 @@ if __name__ == "__main__":
             # 2. Reverse Pass: Reconstruct the box from the parameters
             reconstructed_box = reconstruct_box(center, dims, rot_6d)
             
-            # 3. Validation: Check if they match within a reasonable floating-point tolerance
-            # atol=1e-5 means we tolerate differences up to 0.00001
-            is_match = torch.allclose(original_box, reconstructed_box, atol=1e-3)
+            # 3. Align the original box corner sequence to the new canonical box corner sequence
+            reordered_original_box = reorder_original_box(original_box, reconstructed_box)
             
-            if is_match:
-                pass
-                # print(f"Scene {scene_id} | Box {i}: Perfect Match.")
-            else:
+            # 4. Validation
+            is_match = torch.allclose(reordered_original_box, reconstructed_box, atol=1e-3)
+            
+            if not is_match:
                 print(f"Scene {scene_id} | Box {i}: Mismatch!")
+                print("orignal box: ", original_box)
+                print("reconstructed box: ", reconstructed_box)
                 # Calculate the maximum absolute error for debugging
                 max_error = torch.max(torch.abs(original_box - reconstructed_box))
                 print(f"   Max Error Distance: {max_error.item():.6f}")
