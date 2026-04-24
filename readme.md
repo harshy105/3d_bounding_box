@@ -28,6 +28,7 @@ The original repository uses deprecated PyTorch syntax (AT_CHECK) which causes c
 
 ```bash
 # Clone the repository
+cd ~/
 git clone https://github.com/erikwijmans/Pointnet2_PyTorch.git
 
 # Navigate to the operator library
