@@ -1,4 +1,4 @@
-name: 3d_bb_fix
+name: 3d_bb
 channels:
   - nvidia/label/cuda-11.8.0
   - conda-forge
@@ -20,3 +20,6 @@ dependencies:
       - pydantic
       - hydra-core
       - pytorch-lightning
+      - opencv-python
+      - matplotlib
+      - lmdb
