@@ -12,41 +12,50 @@ Ensure you have the `environment.yml` file in your current directory. This file 
 conda env create -f environment.yml
 
 # Activate the new environment
-conda activate 3d_bb_final
-2. Configure Build Environment
+conda activate 3d_bb
+```
+
+## 2. Configure Build Environment
 To build custom CUDA extensions, the compiler needs to know exactly where the CUDA headers and binaries are located within your Conda environment.
 
-Bash
+```bash
 # Set environment variables for the compiler
 export CUDA_HOME=$CONDA_PREFIX
 export CPATH=$CONDA_PREFIX/include:$CPATH
-3. Clone and Fix PointNet2 Operators
+```
+
+## 3. Clone and Fix PointNet2 Operators
 The original repository uses deprecated PyTorch syntax (AT_CHECK) which causes compilation failures on modern PyTorch versions (2.0+). We apply a suppression fix using sed to update the source code to use TORCH_CHECK.
 
-Bash
+```bash
 # Clone the repository
-git clone [https://github.com/erikwijmans/Pointnet2_PyTorch.git](https://github.com/erikwijmans/Pointnet2_PyTorch.git)
+git clone https://github.com/erikwijmans/Pointnet2_PyTorch.git
 
 # Navigate to the operator library
-cd Pointnet2_PyTorch/pointnet2_ops_lib
+cd ~/Pointnet2_PyTorch/pointnet2_ops_lib
 
 # Apply "Suppression Stuff" - Update old AT_CHECK syntax to modern TORCH_CHECK
 sed -i 's/AT_CHECK/TORCH_CHECK/g' pointnet2_ops/_ext-src/src/*.cpp
 sed -i 's/AT_CHECK/TORCH_CHECK/g' pointnet2_ops/_ext-src/src/*.cu
+
+```
 4. Compile and Install
 Build the custom C++ and CUDA kernels. We disable build isolation to ensure the installation uses the PyTorch and CUDA versions already present in the Conda environment.
 
-Bash
+```bash
 # Final Build and installation in editable mode
 pip install --no-build-isolation -e .
-5. Return to Main Project
+```
+## 5. Return to Main Project
 Once the installation is successful, move back to your original project root to begin training or inference.
 
-Bash
+```bash
 # Navigate back to the main directory
 cd ../..
-Verification
+```
+## Verification
 To verify that the operators were installed correctly and can interface with your GPU, run:
 
-Bash
+```bash
 python -c "import pointnet2_ops; print('PointNet2 Ops successfully installed')"
+```
