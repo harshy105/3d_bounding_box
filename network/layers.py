@@ -1,13 +1,10 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
+from typing import Tuple
 
 class PointNetBackbone(nn.Module):
-    """
-    Placeholder for PointNet++. 
-    Extracts pointwise features F \in R^{N x D} from P \in R^{N x 3}.
-    """
-    def __init__(self, out_dim=256):
+    def __init__(self, out_dim: int) -> None:
         super().__init__()
         self.conv1 = nn.Conv1d(3, 64, 1)
         self.conv2 = nn.Conv1d(64, 128, 1)
@@ -16,27 +13,24 @@ class PointNetBackbone(nn.Module):
         self.bn2 = nn.BatchNorm1d(128)
         self.bn3 = nn.BatchNorm1d(out_dim)
 
-    def forward(self, p):
-        # p: (B, N, 3) -> requires (B, 3, N) for Conv1D
-        x = p.transpose(1, 2)
+    def forward(self, p: Tensor) -> Tensor:
+        x = p.transpose(1, 2) # p: (B, N, 3) -> requires (B, 3, N) for Conv1D
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         F_feat = F.relu(self.bn3(self.conv3(x)))
-        # Output: (B, N, D)
-        return F_feat.transpose(1, 2)
+        return F_feat.transpose(1, 2) # Output: (B, N, D)
 
 class VotingModule(nn.Module):
-    """ MLP_vote to generate offset vectors \Delta p_i """
-    def __init__(self, feature_dim=256):
+    def __init__(self, feature_dim: int) -> None:
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(feature_dim, 128),
             nn.ReLU(),
             nn.BatchNorm1d(128),
-            nn.Linear(128, 3) # Outputs 3D offsets (\Delta x, \Delta y, \Delta z)
+            nn.Linear(128, 3) # Outputs 3D offsets (dx, dy, dz)
         )
 
-    def forward(self, F_feat):
+    def forward(self, F_feat: Tensor) -> Tensor:
         # F_feat: (B, N, D)
         B, N, D = F_feat.shape
         x = F_feat.reshape(B * N, D)
@@ -44,8 +38,7 @@ class VotingModule(nn.Module):
         return offsets.reshape(B, N, 3)
 
 class BBoxRegressionModule(nn.Module):
-    """ MLP_box to predict \Delta s and q_raw (6D Rotation) """
-    def __init__(self, global_feat_dim=512):
+    def __init__(self, global_feat_dim: int) -> None:
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(global_feat_dim, 256),
@@ -57,7 +50,7 @@ class BBoxRegressionModule(nn.Module):
             nn.Linear(128, 9) # 3 for \Delta s, 6 for 6D rotation
         )
 
-    def forward(self, f_global):
+    def forward(self, f_global: Tensor) -> Tuple[Tensor, Tensor]:
         out = self.mlp(f_global)
         delta_s = out[:, 0:3]
         rot_6d = out[:, 3:9]

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple, Dict
+from torch import Tensor
 if TYPE_CHECKING:
     from config import NetConfig, TrainConfig
 
@@ -10,17 +11,17 @@ from network.modules import InstanceVoteNet
 from network.loss import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):
-    def __init__(self, net_config: NetConfig, train_config: TrainConfig):
+    def __init__(self, net_config: NetConfig, train_config: TrainConfig) -> None:
         super().__init__()
         self.save_hyperparameters()
         self.model = InstanceVoteNet(net_config)
         self.criterion = InstanceBoxLoss(train_config)
         self.train_cfg = train_config
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         return self.model(x)
 
-    def shared_step(self, batch, batch_idx):
+    def shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tuple[Tensor, Dict[str, int]]:
         # Note: Adjust these key names based on your LMDB dataset output
         pc_pts = batch["pc_pts"]            # (B, N, 3)
         targ_c = batch["bbox_center"]       # (B, 3)
@@ -38,7 +39,7 @@ class TrainerLitModule(pl.LightningModule):
         )
         return loss, loss_dict
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tensor:
         loss, loss_dict = self.shared_step(batch, batch_idx)
         current_batch_size = batch["pc_pts"].shape[0]
         
@@ -51,7 +52,7 @@ class TrainerLitModule(pl.LightningModule):
             
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tensor:
         loss, loss_dict = self.shared_step(batch, batch_idx)
         current_batch_size = batch["pc_pts"].shape[0]
         
@@ -64,7 +65,7 @@ class TrainerLitModule(pl.LightningModule):
             
         return loss
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> AdamW:
         optimizer = AdamW(
             self.parameters(), 
             lr=self.train_cfg.lr, 
