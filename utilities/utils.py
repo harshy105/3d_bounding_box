@@ -2,6 +2,7 @@ import numpy as np
 import cv2 
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 
 from typing import Optional, Tuple
 from torch import Tensor
@@ -279,3 +280,50 @@ def reorder_original_box(original_box: Tensor, reconstructed_box: Tensor) -> Ten
     reordered_box = original_box[closest_indices]
     
     return reordered_box
+
+def apply_weights(m: nn.Module) -> None:
+    """
+    Global weight initialization function.
+    Raises a ValueError if an unexpected leaf layer is encountered.
+    """
+    # 1. Skip parent modules and containers (like nn.Sequential or the Network itself)
+    # We only want to initialize and strictly check the 'leaf' modules.
+    if len(list(m.children())) > 0:
+        return
+
+    # 2. Apply specific initializations based on the exact layer type
+    if isinstance(m, nn.Conv1d):
+        # Kaiming is optimal for ReLU
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.0)
+            
+    elif isinstance(m, nn.Linear):
+        # --- The Zero-Output Trick for Final Prediction Layers ---
+        # m.out_features == 9: Final BBox Regression (dims + 6D rot)
+        # m.out_features == 3: Final Voting Module offsets (dx, dy, dz)
+        if m.out_features in [3, 9]:
+            nn.init.normal_(m.weight, mean=0.0, std=0.001)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0.0)
+        else:
+            # Normal Kaiming for all other hidden Linear layers inside MLPs
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0.0)
+            
+    elif isinstance(m, nn.BatchNorm1d):
+        # Standard BatchNorm init: weight (gamma) = 1, bias (beta) = 0
+        nn.init.constant_(m.weight, 1.0)
+        nn.init.constant_(m.bias, 0.0)
+    
+    elif isinstance(m, nn.ReLU):
+        # ReLU has no parameters, so we simply pass
+        pass
+              
+    else:
+        # 3. Raise an error if any other leaf layer is found
+        raise ValueError(
+            f"Strict Init Error: Unexpected layer type encountered -> {type(m).__name__}. "
+            f"Please add it to the apply_weights function."
+        )

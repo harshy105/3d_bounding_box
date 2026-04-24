@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Tuple
 
+from utilities.utils import apply_weights
 from network.layers import PointNetBackbone, VotingModule, BBoxRegressionModule
 from config import NetConfig
 
@@ -24,6 +25,7 @@ class InstanceVoteNet(nn.Module):
         
         # 3. Regression
         self.box_mlp = BBoxRegressionModule(global_feat_dim=config.global_feature_dim)
+        self.apply(apply_weights)
 
     def forward(self, P: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         B, N, _ = P.shape # (B, N, 3)

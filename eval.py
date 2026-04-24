@@ -216,11 +216,11 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     print("="*40)
 
 if __name__ == "__main__":
-    ckpt_name = "20260423_183658_base-epoch=48-val_loss=0.2153.ckpt"
+    ckpt_name = "20260424_113344_base-epoch=28-val_loss=0.2243.ckpt"
     CKPT_PATH = os.path.join(Paths.ckpts, ckpt_name.split("-")[0], ckpt_name)
     
     evaluate_model(
         checkpoint_path=CKPT_PATH, 
         split="test", 
-        num_vis_samples=5
+        num_vis_samples=20,
     )
