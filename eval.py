@@ -10,14 +10,44 @@ from data_loader import LMDBInstanceDataset
 from network.trainer import TrainerLitModule
 from utilities.utils import reconstruct_unique_box
 
+
+def draw_axes(center, dims, rot6d, color, ax):
+# --- Helper function to draw 6D Rot Axes scaled by Dimensions ---
+    w, h, _ = dims # Extract Width and Height for scaling
+    
+    v1_raw = rot6d[:3]
+    v2_raw = rot6d[3:]
+    
+    # Gram-Schmidt Orthogonalization (numpy equivalent)
+    v1 = v1_raw / (np.linalg.norm(v1_raw) + 1e-8)
+    v2_proj = v2_raw - np.dot(v2_raw, v1) * v1
+    v2 = v2_proj / (np.linalg.norm(v2_proj) + 1e-8)
+    
+    # Scale axes by half the dimension size to visually match the box boundaries
+    x_scaled = v1 * (w / 2.0)
+    y_scaled = v2 * (h / 2.0)
+    
+    # Draw X-axis (solid)
+    ax.quiver(center[0], center[1], center[2], 
+                    x_scaled[0], x_scaled[1], x_scaled[2], 
+                    color=color, arrow_length_ratio=0.15, linewidth=2)
+    # Draw Y-axis (dotted to distinguish from X)
+    ax.quiver(center[0], center[1], center[2], 
+                    y_scaled[0], y_scaled[1], y_scaled[2], 
+                    color=color, arrow_length_ratio=0.15, linewidth=2, linestyle=":")
+    
+        
 def visualize_eval_sample(img_tensor: Tensor, pc_tensor: Tensor, 
-                          gt_box: np.ndarray, pred_box: np.ndarray, sample_key: str):
+                          gt_box: np.ndarray, pred_box: np.ndarray, 
+                          gt_c: np.ndarray, pred_c: np.ndarray,
+                          gt_s: np.ndarray, pred_s: np.ndarray,
+                          gt_rot6d: np.ndarray, pred_rot6d: np.ndarray,
+                          sample_key: str):
     """
-    Custom visualization for evaluation.
     Plots the RGB image with mask on the left.
-    Plots the Point Cloud, GT Box (Green), and Pred Box (Red) on the right.
+    Plots the Point Cloud, GT Box (Green), Pred Box (Red), Centers, and Axes on the right.
     """
-    fig = plt.figure(figsize=(14, 6))
+    fig = plt.figure(figsize=(15, 7))
     
     # --- Left: RGB + Mask ---
     ax_img = fig.add_subplot(1, 2, 1)
@@ -43,7 +73,7 @@ def visualize_eval_sample(img_tensor: Tensor, pc_tensor: Tensor,
         pts = valid_pts
 
     if len(pts) > 0:
-        ax_3d.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, c="blue", alpha=0.3, label="Point Cloud")
+        ax_3d.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, c="blue", alpha=0.2, label="Point Cloud")
 
     edges = [
         (0, 1), (1, 2), (2, 3), (3, 0), # Bottom
@@ -61,9 +91,24 @@ def visualize_eval_sample(img_tensor: Tensor, pc_tensor: Tensor,
         ax_3d.plot(pred_box[list(edge), 0], pred_box[list(edge), 1], pred_box[list(edge), 2], 
                    c="red", linewidth=2, linestyle="--", label="Prediction" if i == 0 else "")
 
+    # --- Visualize Centers ---
+    ax_3d.scatter(gt_c[0], gt_c[1], gt_c[2], c="green", s=150, marker="*", label="GT Center")
+    ax_3d.scatter(pred_c[0], pred_c[1], pred_c[2], c="red", s=150, marker="*", label="Pred Center")
+
+    # Draw Axes
+    draw_axes(gt_c, gt_s, gt_rot6d, color="green", ax=ax_3d)
+    draw_axes(pred_c, pred_s, pred_rot6d, color="red", ax=ax_3d)
+
+    # --- Overlay Exact Dimension Values ---
+    info_text = (f"GT Dims (W,H,L): {gt_s[0]:.2f}, {gt_s[1]:.2f}, {gt_s[2]:.2f}\n"
+                 f"PR Dims (W,H,L): {pred_s[0]:.2f}, {pred_s[1]:.2f}, {pred_s[2]:.2f}")
+    ax_3d.text2D(0.05, 0.95, info_text, transform=ax_3d.transAxes, 
+                 fontsize=10, verticalalignment='top',
+                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray'))
+
     ax_3d.set_xlabel("X"); ax_3d.set_ylabel("Y"); ax_3d.set_zlabel("Z")
     ax_3d.view_init(elev=-90, azim=-90)
-    ax_3d.legend(loc="upper right")
+    ax_3d.legend(loc="upper right", bbox_to_anchor=(1.15, 1))
     
     plt.tight_layout()
     plt.show()
@@ -108,6 +153,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             pc_pts = batch["pc_pts"].to(device)
             targ_c = batch["bbox_center"].to(device)
             targ_s = batch["bbox_dims"].to(device)
+            targ_rot6d = batch["bbox_rot_6d"].to(device)
             targ_corners = batch["bbox_3d"].to(device)
             
             # Forward Pass
@@ -144,11 +190,16 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
                         pc_tensor=batch["pc_pts"][i],
                         gt_box=targ_corners[i].cpu().numpy(),
                         pred_box=pred_corners[i].cpu().numpy(),
+                        gt_c=targ_c[i].cpu().numpy(),
+                        pred_c=pred_c[i].cpu().numpy(),
+                        gt_s=targ_s[i].cpu().numpy(),
+                        pred_s=pred_s[i].cpu().numpy(),
+                        gt_rot6d=targ_rot6d[i].cpu().numpy(),
+                        pred_rot6d=pred_rot6d[i].cpu().numpy(),
                         sample_key=batch["key"][i]
                     )
                     vis_count += 1
 
-    # --- Final Output ---
     avg_center_err = total_center_err / num_samples
     avg_dim_err = total_dim_err / num_samples
     avg_corner_err = total_corner_err / num_samples
@@ -170,6 +221,6 @@ if __name__ == "__main__":
     
     evaluate_model(
         checkpoint_path=CKPT_PATH, 
-        split="test",            # Change to "val" if you just want to check validation
-        num_vis_samples=5        # Number of side-by-side plots to generate
+        split="test", 
+        num_vis_samples=5
     )
