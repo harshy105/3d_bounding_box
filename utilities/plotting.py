@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional
 import matplotlib.image as mpimg
-import cv2 
 
 from config import Paths
 from utilities.utils import augment_instance

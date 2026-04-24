@@ -10,7 +10,7 @@ dependencies:
   - gxx_linux-64=11.4.0
   - libxcrypt
   - cmake
-  - numpy=2.0.2
+  - numpy=1.26.4
   - pip
   - pip:
       - --extra-index-url https://download.pytorch.org/whl/cu118
@@ -20,6 +20,5 @@ dependencies:
       - pydantic
       - hydra-core
       - pytorch-lightning
-      - opencv-python
       - matplotlib
       - lmdb
