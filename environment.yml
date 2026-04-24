@@ -20,4 +20,3 @@ dependencies:
       - pydantic
       - hydra-core
       - pytorch-lightning
-      - pytorch-utils
