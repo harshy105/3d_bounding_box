@@ -44,7 +44,7 @@ class LMDBInstanceDataset(Dataset):
     def __len__(self) -> int:
         return len(self.keys)
 
-    def __getitem__(self, idx: int) -> Dict:
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
         self._init_env()
         
         with self.env.begin() as txn:
@@ -53,7 +53,7 @@ class LMDBInstanceDataset(Dataset):
             
         return self.process_sample(idx, sample)
             
-    def process_sample(self, idx: int, sample: Dict) -> Dict:            
+    def process_sample(self, idx: int, sample: Dict[str, np.ndarray]) -> Dict[str, Tensor]:            
         pc_pts = sample["pc_pts"]
         bbox_3d = sample["bbox_3d"]
         img_crop = sample["img_crop"]
@@ -107,7 +107,7 @@ class LMDBInstanceDataset(Dataset):
         
         return sample
 
-    def visualize_sample(self, sample: Dict, reconstructed_box: Optional[Tensor] = None) -> None:
+    def visualize_sample(self, sample: Dict[str, np.ndarray], reconstructed_box: Optional[Tensor] = None) -> None:
         img_tensor = sample["img_crop"]
         pc_tensor = sample["pc_pts"]
 
