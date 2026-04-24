@@ -16,7 +16,7 @@ import os
 
 from utilities.utils import (extract_3d_bbox_params, augment_instance, 
                              reconstruct_unique_box, reorder_original_box)
-from utilities.plotting import draw_bboxes_on_image, plot_instance
+from utilities.plotting import plot_instance
 from unit_test.box_preprocessing_test import (have_identical_corner_sets, 
                                               are_corners_close)
 

@@ -9,10 +9,6 @@ class Paths:
     logs: str = "/mnt/c/d/3d_bb_ckpts_n_logs/logs"
 
 @dataclass
-class DataPreprocessingConfig:
-    crop_img_size: Tuple[int, int] = (64, 64)
-
-@dataclass
 class DataLoaderConfig:
     max_number_pc_pts: int = 2048
     batch_size: int = 32
