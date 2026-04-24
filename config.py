@@ -23,9 +23,10 @@ class DataLoaderConfig:
 
 @dataclass
 class NetConfig:
-    point_feature_dim: int = 256
-    global_feature_dim: int = 512
-    template_dims: Tuple[float, float, float] = (1.0, 1.0, 1.0) # Default dims
+    # point_feature_dim: int = 256
+    # global_feature_dim: int = 512
+    # template_dims: Tuple[float, float, float] = (1.0, 1.0, 1.0) # Default dims
+    pass
 
 @dataclass
 class TrainConfig:
