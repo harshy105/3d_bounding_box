@@ -8,7 +8,7 @@ import pytorch_lightning as pl
 from torch.optim import AdamW
 
 from network.modules import InstanceVoteNet
-from network.loss import InstanceBoxLoss
+from network.loss_helper import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):
     def __init__(self, net_config: NetConfig, train_config: TrainConfig) -> None:
