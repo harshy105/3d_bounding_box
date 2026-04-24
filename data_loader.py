@@ -91,7 +91,7 @@ class LMDBInstanceDataset(Dataset):
         assert are_corners_close(reordered_bbox_tensor, reconstructed_box, atol=1e-3), \
             f"Reconstruction of the box is not 1-to-1 map Sample {self.keys[idx]}"
         
-        sample = {
+        sample_processed = {
             "img_crop": img_tensor,
             "pc_pts": pc_tensor,
             "bbox_3d": reordered_bbox_tensor,
@@ -103,13 +103,13 @@ class LMDBInstanceDataset(Dataset):
         
         # 5. Run tests on the sample and visualize
         if self.vis_sample:
-            self.visualize_sample(sample, reordered_bbox_tensor)
+            self.visualize_sample(sample_processed, reordered_bbox_tensor)
         
-        return sample
+        return sample_processed
 
-    def visualize_sample(self, sample: Dict[str, np.ndarray], reconstructed_box: Optional[Tensor] = None) -> None:
-        img_tensor = sample["img_crop"]
-        pc_tensor = sample["pc_pts"]
+    def visualize_sample(self, sample_processed: Dict[str, Tensor], reconstructed_box: Optional[Tensor] = None) -> None:
+        img_tensor = sample_processed["img_crop"]
+        pc_tensor = sample_processed["pc_pts"]
 
         # Plotting Setup
         fig = plt.figure(figsize=(12, 5))
