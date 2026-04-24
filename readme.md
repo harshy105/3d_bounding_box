@@ -1,4 +1,3 @@
-Markdown
 # 3D Bounding Box Environment Setup
 
 This repository contains the setup instructions for the 3D computer vision environment, specifically focused on compiling and installing the **PointNet++** custom CUDA operators on WSL/Linux using Conda.
