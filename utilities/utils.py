@@ -123,7 +123,8 @@ def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     
     return center, dims, rot_6d
 
-def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
+def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor, 
+                    output_rot_mat: Optional[bool] = False) -> Tuple[Tensor, Optional[Tensor]]:
     """
     Reconstructs unique (8, 3) bounding box from parameters.
     3D rotation is unique and continous as shown in
@@ -185,6 +186,9 @@ def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tens
     # Return original shape if it wasn't batched
     if not is_batched:
         box = box.squeeze(0)
+        
+    if output_rot_mat:
+        return box, R
         
     return box
 
