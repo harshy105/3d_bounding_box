@@ -50,7 +50,6 @@ class ProposalModule(nn.Module):
         Returns:
             scores: (B,num_proposal,2+3+NH*2+NS*4) 
         """
-        # Farthest point sampling (FPS) on votes
         xyz, features, fps_inds = self.vote_aggregation(xyz, features)
         sample_inds = fps_inds
         
@@ -65,3 +64,12 @@ class ProposalModule(nn.Module):
         assert self.num_proposal == 1, "Decoding only based on one bounding box"
         end_points = decode_single_scores(net, end_points)
         return end_points
+
+if __name__ == "__main__":
+    xyz = torch.zeros(8, 32, 3).float().cuda()
+    features = torch.zeros(8, 256, 32).float().cuda()
+    pnet = ProposalModule(1, 256).cuda()
+    pnet.eval()
+    end_points = {}
+    end_points = pnet(xyz, features, end_points)
+    print(end_points["center"].shape)
