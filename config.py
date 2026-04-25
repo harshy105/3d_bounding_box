@@ -21,7 +21,8 @@ class DataLoaderConfig:
 class NetConfig:
     input_feature_dim : int = 3 # for RGB
     dropout: float = 0.4
-    proposal_hid_dim: int = 256
+    seed_feature_dim: int = 256
+    voting_factor: int = 1
 
 @dataclass
 class TrainConfig:
