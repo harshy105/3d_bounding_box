@@ -32,9 +32,11 @@ class TrainerLitModule(pl.LightningModule):
         end_points = self(pc_pts)
 
         # Compute Loss
+        pc_centroid = pc_pts[..., :3].mean(dim=1)  # (B, 3)
         loss, loss_dict = self.criterion(
-            end_points["center"], end_points["size"], end_points["rot_6d"], 
-            targ_c, targ_s, targ_rot6d, targ_corners
+            end_points["center"], end_points["size"], end_points["rot_6d"],
+            targ_c, targ_s, targ_rot6d, targ_corners,
+            pc_centroid,
         )
         return loss, loss_dict
 

@@ -28,7 +28,8 @@ class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-5
     max_epochs: int = 50
-    center_loss_weight: float = 1.0
-    dim_loss_weight: float = 1.0
-    rot_loss_weight: float = 1.0
-    corner_loss_weight: float = 1.0
+    center_loss_weight  = 5.0  
+    dim_loss_weight     = 0.5   
+    rot_loss_weight     = 5.0 
+    rot_reg_weight      = 0.1
+    corner_loss_weight  = 2.0
