@@ -27,6 +27,7 @@ import numpy as np
 
 from network.votenet.backbone_small_module import Pointnet2Backbone
 from network.votenet.proposal_small_module import BboxRegressionHead
+from network.votenet.voting_module import VotingModule
 
 
 class VoteNet(nn.Module):
@@ -52,9 +53,12 @@ class VoteNet(nn.Module):
         self.input_feature_dim = config.input_feature_dim
 
         self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+        
+        self.voting_net = VotingModule(config.voting_factor, 
+                            seed_feature_dim=config.seed_feature_dim)
 
         # Direct regression head → 12 box params
-        self.bbox_head = BboxRegressionHead(feat_dim=config.proposal_hid_dim, 
+        self.bbox_head = BboxRegressionHead(feat_dim=config.seed_feature_dim, 
                                             dropout=config.dropout)
 
     def forward(self, pc_pts):
@@ -74,20 +78,11 @@ class VoteNet(nn.Module):
 
         end_points = self.backbone_net(pc_pts, end_points)
 
-        features = end_points['sa3_features']   
-        xyz      = end_points['sa3_xyz']   
+        seed_features = end_points['sa3_features']   
+        seed_xyz = end_points['sa3_xyz'] 
+        
+        vote_xyz, vote_features = self.voting_net(seed_xyz, seed_features) 
 
-        end_points = self.bbox_head(features, xyz, end_points)
+        end_points = self.bbox_head(vote_features, vote_xyz, end_points)
 
         return end_points
-
-
-if __name__ == '__main__':
-    B = 8
-    inputs = {'point_clouds': torch.rand((B, 2048, 3)).cuda()}
-    model = VoteNet(input_feature_dim=0, dropout=0.4).cuda()
-    end_points = model(inputs)
-    print('center  ', end_points['center'].shape)   
-    print('size    ', end_points['size'].shape)     
-    print('rot_6d  ', end_points['rot_6d'].shape)  
-    print('rot_mat ', end_points['rot_mat'].shape) 
