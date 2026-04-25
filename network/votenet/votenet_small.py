@@ -57,10 +57,10 @@ class VoteNet(nn.Module):
         self.bbox_head = BboxRegressionHead(feat_dim=config.proposal_hid_dim, 
                                             dropout=config.dropout)
 
-    def forward(self, inputs):
+    def forward(self, pc_pts):
         """
         Args:
-            inputs : dict with key 'point_clouds'
+            inputs : 
                 point_clouds : (B, N, 3 + input_feature_dim)
 
         Returns:
@@ -72,7 +72,7 @@ class VoteNet(nn.Module):
         """
         end_points = {}
 
-        end_points = self.backbone_net(inputs['point_clouds'], end_points)
+        end_points = self.backbone_net(pc_pts, end_points)
 
         features = end_points['sa3_features']   
         xyz      = end_points['sa3_xyz']   

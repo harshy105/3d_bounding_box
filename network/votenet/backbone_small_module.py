@@ -15,9 +15,7 @@
                       only needed for per-point tasks (voting, segmentation).
                       BboxRegressionHead global-pools the SA3 output directly,
                       so FP adds zero useful signal and significant parameters.
-      - Output key:   'fp2_features'/'fp2_xyz' replaced by
-                      'sa3_features'/'sa3_xyz' to reflect the true source.
-                      votenet.py reads these new keys.
+      - Output key:   'sa3_features'/'sa3_xyz' 
 
     Parameter count (approximate):
         Original backbone : ~3.1 M
@@ -116,9 +114,6 @@ class Pointnet2Backbone(nn.Module):
         end_points['sa3_inds']     = fps_inds
         end_points['sa3_xyz']      = xyz
         end_points['sa3_features'] = features
-
-        end_points['fp2_xyz']      = end_points['sa3_xyz']
-        end_points['fp2_features'] = end_points['sa3_features']
 
         return end_points
 
