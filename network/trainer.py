@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 import pytorch_lightning as pl
 from torch.optim import AdamW
 
-from network.votenet.votenet_small import VoteNet
+from network.votenet.votenet import VoteNet
 from network.loss_helper import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):

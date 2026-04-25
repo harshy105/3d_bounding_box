@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from network.votenet.backbone_small_module import Pointnet2Backbone
-from network.votenet.proposal_small_module import ProposalModule
+from network.votenet.backbone_module import Pointnet2Backbone
+from network.votenet.proposal_module import ProposalModule
 from network.votenet.voting_module import VotingModule
 
 
