@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import pointnet2_utils
+import network.votenet.pointnet2_utils as pointnet2_utils
 import network.votenet.pytorch_utils as pt_utils
 from typing import List, Tuple
 from torch import Tensor

@@ -7,14 +7,14 @@ if TYPE_CHECKING:
 import pytorch_lightning as pl
 from torch.optim import AdamW
 
-from network.modules import InstanceVoteNet
+from network.votenet.votenet_small import VoteNet
 from network.loss_helper import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):
     def __init__(self, net_config: NetConfig, train_config: TrainConfig) -> None:
         super().__init__()
         self.save_hyperparameters()
-        self.model = InstanceVoteNet(net_config)
+        self.model = VoteNet(net_config)
         self.criterion = InstanceBoxLoss(train_config)
         self.train_cfg = train_config
 

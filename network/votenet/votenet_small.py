@@ -16,11 +16,14 @@
 Author: Charles R. Qi and Or Litany (original)
 Modified for single-instance bbox regression.
 """
-
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from config import NetConfig
+    
 import torch
 import torch.nn as nn
 import numpy as np
-
 
 from network.votenet.backbone_small_module import Pointnet2Backbone
 from network.votenet.proposal_small_module import BboxRegressionHead
@@ -43,15 +46,16 @@ class VoteNet(nn.Module):
         Higher values help regularise small datasets.
     """
 
-    def __init__(self, input_feature_dim=0, dropout=0.4):
+    def __init__(self, config: NetConfig):
         super().__init__()
 
-        self.input_feature_dim = input_feature_dim
+        self.input_feature_dim = config.input_feature_dim
 
         self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
 
         # Direct regression head → 12 box params
-        self.bbox_head = BboxRegressionHead(feat_dim=256, dropout=dropout)
+        self.bbox_head = BboxRegressionHead(feat_dim=config.proposal_hid_dim, 
+                                            dropout=config.dropout)
 
     def forward(self, inputs):
         """
