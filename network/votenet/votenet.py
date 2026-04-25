@@ -77,9 +77,9 @@ class VoteNet(nn.Module):
 
         end_points = self.backbone_net(pc_pts, end_points)
 
-        xyz = end_points['fp2_xyz']
-        features = end_points['fp2_features']
-        end_points['seed_inds'] = end_points['fp2_inds']
+        xyz = end_points['sa3_xyz']
+        features = end_points['sa3_features']
+        end_points['seed_inds'] = end_points['sa3_inds']
         end_points['seed_xyz'] = xyz
         end_points['seed_features'] = features
         
