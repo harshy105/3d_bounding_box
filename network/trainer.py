@@ -33,8 +33,8 @@ class TrainerLitModule(pl.LightningModule):
 
         # Compute Loss
         loss, loss_dict = self.criterion(
+            targ_c, targ_s, targ_rot6d, targ_corners,
             end_points["center"], end_points["size"], end_points["rot_6d"], 
-            targ_c, targ_s, targ_rot6d, targ_corners
         )
         return loss, loss_dict
 

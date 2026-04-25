@@ -23,6 +23,7 @@ class NetConfig:
     dropout: float = 0.4
     seed_feature_dim: int = 256
     voting_factor: int = 1
+    num_proposal: int = 1
 
 @dataclass
 class TrainConfig:
@@ -30,6 +31,6 @@ class TrainConfig:
     weight_decay: float = 1e-5
     max_epochs: int = 50
     center_loss_weight: float = 1.0
-    dim_loss_weight: float = 1.0
-    rot_loss_weight: float = 1.0
-    corner_loss_weight: float = 1.0
+    dim_loss_weight: float = 0.0
+    rot_loss_weight: float = 0.0
+    corner_loss_weight: float = 0.0

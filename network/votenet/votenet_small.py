@@ -26,7 +26,7 @@ import torch.nn as nn
 import numpy as np
 
 from network.votenet.backbone_small_module import Pointnet2Backbone
-from network.votenet.proposal_small_module import BboxRegressionHead
+from network.votenet.proposal_small_module import ProposalModule
 from network.votenet.voting_module import VotingModule
 
 
@@ -54,12 +54,11 @@ class VoteNet(nn.Module):
 
         self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
         
-        self.voting_net = VotingModule(config.voting_factor, 
+        self.vgen = VotingModule(config.voting_factor, 
                             seed_feature_dim=config.seed_feature_dim)
 
-        # Direct regression head → 12 box params
-        self.bbox_head = BboxRegressionHead(feat_dim=config.seed_feature_dim, 
-                                            dropout=config.dropout)
+        self.pnet = ProposalModule(num_proposal=config.num_proposal, 
+                            seed_feat_dim=config.seed_feature_dim)
 
     def forward(self, pc_pts):
         """
@@ -78,11 +77,18 @@ class VoteNet(nn.Module):
 
         end_points = self.backbone_net(pc_pts, end_points)
 
-        seed_features = end_points['sa3_features']   
-        seed_xyz = end_points['sa3_xyz'] 
+        xyz = end_points['fp2_xyz']
+        features = end_points['fp2_features']
+        end_points['seed_inds'] = end_points['fp2_inds']
+        end_points['seed_xyz'] = xyz
+        end_points['seed_features'] = features
         
-        vote_xyz, vote_features = self.voting_net(seed_xyz, seed_features) 
+        xyz, features = self.vgen(xyz, features)
+        features_norm = torch.norm(features, p=2, dim=1)
+        features = features.div(features_norm.unsqueeze(1))
+        end_points['vote_xyz'] = xyz
+        end_points['vote_features'] = features
 
-        end_points = self.bbox_head(vote_features, vote_xyz, end_points)
+        end_points = self.pnet(xyz, features, end_points)
 
         return end_points
