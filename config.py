@@ -9,10 +9,6 @@ class Paths:
     logs: str = "/mnt/c/d/3d_bb_ckpts_n_logs/logs"
 
 @dataclass
-class DataPreprocessingConfig:
-    crop_img_size: Tuple[int, int] = (64, 64)
-
-@dataclass
 class DataLoaderConfig:
     max_number_pc_pts: int = 2048
     batch_size: int = 32
@@ -23,9 +19,9 @@ class DataLoaderConfig:
 
 @dataclass
 class NetConfig:
-    point_feature_dim: int = 256
-    global_feature_dim: int = 512
-    template_dims: Tuple[float, float, float] = (1.0, 1.0, 1.0) # Default dims
+    input_feature_dim : int = 3 # for RGB
+    dropout: float = 0.4
+    proposal_hid_dim: int = 256
 
 @dataclass
 class TrainConfig:

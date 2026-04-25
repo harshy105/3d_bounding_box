@@ -43,7 +43,7 @@ if __name__ == "__main__":
         filename=f"{run_name}-{{epoch:02d}}-{{val_loss:.4f}}", # Appends epoch and loss to filename
         monitor="val_loss",  # Make sure you are logging "val_loss" in your validation_step!
         mode="min",          # "min" because we want the lowest validation loss
-        save_top_k=2,        # Keep only the best 2
+        save_top_k=1,        # Keep only the best 2
         save_weights_only=False # Set to True if you want to save space by dropping optimizer states
     )
     

@@ -7,14 +7,14 @@ if TYPE_CHECKING:
 import pytorch_lightning as pl
 from torch.optim import AdamW
 
-from network.modules import InstanceVoteNet
-from network.loss import InstanceBoxLoss
+from network.votenet.votenet_small import VoteNet
+from network.loss_helper import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):
     def __init__(self, net_config: NetConfig, train_config: TrainConfig) -> None:
         super().__init__()
         self.save_hyperparameters()
-        self.model = InstanceVoteNet(net_config)
+        self.model = VoteNet(net_config)
         self.criterion = InstanceBoxLoss(train_config)
         self.train_cfg = train_config
 
@@ -22,7 +22,6 @@ class TrainerLitModule(pl.LightningModule):
         return self.model(x)
 
     def shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tuple[Tensor, Dict[str, int]]:
-        # Note: Adjust these key names based on your LMDB dataset output
         pc_pts = batch["pc_pts"]            # (B, N, 3)
         targ_c = batch["bbox_center"]       # (B, 3)
         targ_s = batch["bbox_dims"]         # (B, 3)
@@ -30,11 +29,11 @@ class TrainerLitModule(pl.LightningModule):
         targ_corners = batch["bbox_3d"]     # (B, 8, 3)
 
         # Forward pass
-        pred_c, pred_s, pred_rot6d = self(pc_pts)
+        end_points = self(pc_pts)
 
         # Compute Loss
         loss, loss_dict = self.criterion(
-            pred_c, pred_s, pred_rot6d, 
+            end_points["center"], end_points["size"], end_points["rot_6d"], 
             targ_c, targ_s, targ_rot6d, targ_corners
         )
         return loss, loss_dict

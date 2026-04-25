@@ -16,7 +16,7 @@ import os
 
 from utilities.utils import (extract_3d_bbox_params, augment_instance, 
                              reconstruct_unique_box, reorder_original_box)
-from utilities.plotting import draw_bboxes_on_image, plot_instance
+from utilities.plotting import plot_instance
 from unit_test.box_preprocessing_test import (have_identical_corner_sets, 
                                               are_corners_close)
 
@@ -54,15 +54,14 @@ class LMDBInstanceDataset(Dataset):
         return self.process_sample(idx, sample)
             
     def process_sample(self, idx: int, sample: Dict[str, np.ndarray]) -> Dict[str, Tensor]:            
-        pc_pts = sample["pc_pts"]
+        pc_pts = sample["pc_pts"] # shape (N, 6) position + RGB
         bbox_3d = sample["bbox_3d"]
-        img_crop = sample["img_crop"]
         
-        # 1. Apply data augmentation
+        # Apply data augmentation
         if self.apply_aug:
-            pc_pts, bbox_3d, img_crop = augment_instance(pc_pts, bbox_3d, img_crop)
+            pc_pts, bbox_3d = augment_instance(pc_pts, bbox_3d)
             
-        # 2. Ensure uniform point cloud size for batching (Subsample or Zero-Pad)
+        # Ensure uniform point cloud size for batching (Subsample or Zero-Pad)
         num_current_pts = pc_pts.shape[0]
         if num_current_pts >= self.num_points:
             choice = np.random.choice(num_current_pts, self.num_points, replace=False)
@@ -73,26 +72,26 @@ class LMDBInstanceDataset(Dataset):
             pc_pts = np.concatenate((pc_pts, zero_padding), axis=0)
         
         pc_tensor = torch.from_numpy(pc_pts).float()
-
-        # 3. Convert image to Torch and permute to (Channels, Height, Width) format
-        img_tensor = torch.from_numpy(img_crop).permute(2, 0, 1).float() / 255.0
         
-        # 4. Extract canonical features from the 3D bounding box and reorder the bounding
+        # Extract canonical features from the 3D bounding box and reorder the bounding
         #  box corner sequence so that the neural network can learn in a stable manner
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
+        
         # Generate a unique bounding box given the bouning box parameters
         reconstructed_box = reconstruct_unique_box(bbox_center, bbox_dims, bbox_rot_6d)
+        
         # reorder original box corners based on the reconstructed box
         reordered_bbox_tensor = reorder_original_box(bbox_tensor, reconstructed_box)
+        
         assert have_identical_corner_sets(reordered_bbox_tensor, bbox_tensor), \
             f"Reordered box is not same as original box in Sample {self.keys[idx]}"
-        # Test whether the unique reconstructed box is acutally same as the some permuation of original box
+            
+        # Test whether the unique reconstructed box is actually same as some permutation of original box
         assert are_corners_close(reordered_bbox_tensor, reconstructed_box, atol=1e-3), \
             f"Reconstruction of the box is not 1-to-1 map Sample {self.keys[idx]}"
         
         sample_processed = {
-            "img_crop": img_tensor,
             "pc_pts": pc_tensor,
             "bbox_3d": reordered_bbox_tensor,
             "bbox_center": bbox_center,
@@ -101,39 +100,25 @@ class LMDBInstanceDataset(Dataset):
             "key": self.keys[idx].decode('ascii')
         }
         
-        # 5. Run tests on the sample and visualize
+        # Run tests on the sample and visualize
         if self.vis_sample:
             self.visualize_sample(sample_processed, reordered_bbox_tensor)
         
         return sample_processed
 
     def visualize_sample(self, sample_processed: Dict[str, Tensor], reconstructed_box: Optional[Tensor] = None) -> None:
-        img_tensor = sample_processed["img_crop"]
         pc_tensor = sample_processed["pc_pts"]
 
-        # Plotting Setup
-        fig = plt.figure(figsize=(12, 5))
+        fig = plt.figure(figsize=(8, 8))
+        ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
         
-        # Plot RGB Crop (Channels 0:3, permuted back to HxWxC for Matplotlib)
-        ax_img = fig.add_subplot(1, 2, 1)
-        img_display = img_tensor[:3].permute(1, 2, 0).numpy()
-        ax_img.imshow(img_display)
-        
-        # Overlay the Instance Mask (Channel 3)
-        mask_display = img_tensor[3].numpy()
-        ax_img.imshow(np.ma.masked_where(mask_display == 0, mask_display), cmap='gray_r', vmin=0, vmax=1, alpha=0.8)
-        ax_img.set_title("RGB Crop + Mask Overlay")
-        ax_img.axis("off")
-        
-        # Plot 3D Point Cloud and the RECONSTRUCTED box
-        ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
         if reconstructed_box is not None:
             plot_instance(pc_pts=pc_tensor.numpy(), bbox_3d=reconstructed_box.numpy(), ax=ax_3d)
-            ax_3d.set_title("3D Point Cloud & Reconstructed Box")
+            ax_3d.set_title("3D Point Cloud (RGB) & Reconstructed Box")
         else:
-            original_box = sample["bbox_3d"]
+            original_box = sample_processed["bbox_3d"]
             plot_instance(pc_pts=pc_tensor.numpy(), bbox_3d=original_box.numpy(), ax=ax_3d)
-            ax_3d.set_title("3D Point Cloud & Original Box")
+            ax_3d.set_title("3D Point Cloud (RGB) & Original Box")
         
         plt.tight_layout()
         plt.show()
@@ -168,8 +153,6 @@ class InstanceDataModule(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        
-        
         return DataLoader(
             self.val_dataset, 
             batch_size=self.batch_size, 
@@ -183,7 +166,7 @@ if __name__ == "__main__":
     from config import Paths
     from config import DataLoaderConfig
     split = "val"
-    dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=DataLoaderConfig,
+    dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=DataLoaderConfig(),
                                   apply_aug=True, vis_sample=True)
     
     # Check if the dataset contains any samples before starting

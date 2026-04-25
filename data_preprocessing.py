@@ -8,8 +8,6 @@ import warnings
 from tqdm import tqdm
 
 from config import Paths
-from config import DataPreprocessingConfig
-from utilities.utils import get_rgb_crop
 
 if __name__ == "__main__":
     data_path = Paths.data
@@ -79,24 +77,26 @@ if __name__ == "__main__":
             # Extract valid pixels for this specific instance
             valid_pixels = inst_mask_2d > 0
             
-            # Extract point cloud (N, 3)
-            pc_pts = pc[:, valid_pixels].T 
+            # Extract point cloud geometry (N, 3)
+            xyz = pc[:, valid_pixels].T 
             
             # Skip empty instances (completely occluded or out of frame)
-            if len(pc_pts) == 0:
+            if len(xyz) == 0:
                 warnings.warn(f"Scene {scene_id}, Instance {i} has no point clouds")
                 continue
                 
+            # Extract matching RGB pixels (N, 3)
+            rgb = img[valid_pixels]
+            
+            # Concatenate XYZ and RGB to create an (N, 6) point cloud
+            pc_pts = np.hstack((xyz, rgb))
+            
             # Extract bounding box (8, 3)
             bbox_3d = bbox[i]
-            
-            # Extract image crop (64, 64, 4), 4th is the mask
-            img_crop = get_rgb_crop(img, inst_mask_2d, target_size=DataPreprocessingConfig.crop_img_size)
             
             # Package the parsed data
             sample = {
                 "bbox_3d": bbox_3d,
-                "img_crop": img_crop,
                 "pc_pts": pc_pts
             }
             

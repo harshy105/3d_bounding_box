@@ -1,5 +1,4 @@
 import numpy as np
-import cv2 
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -7,82 +6,20 @@ import torch.nn as nn
 from typing import Optional, Tuple
 from torch import Tensor
 
-def recover_intrinsics(pc: np.ndarray) -> np.ndarray:
+def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Reverse-engineers the Camera Intrinsic Matrix (K) from the organized point cloud.
-    Uses u = fx * (X/Z) + cx and v = fy * (Y/Z) + cy.
-    """
-    _, H, W = pc.shape
-    u, v = np.meshgrid(np.arange(W), np.arange(H))
-    
-    X, Y, Z = pc[0].flatten(), pc[1].flatten(), pc[2].flatten()
-    u, v = u.flatten(), v.flatten()
-    
-    # Filter valid depth points
-    valid = (Z > 0.1) & np.isfinite(Z) & np.isfinite(X) & np.isfinite(Y)
-    
-    # Linear fit to find focal lengths (slope) and optical centers (intercept)
-    fx, cx = np.polyfit(X[valid] / Z[valid], u[valid], 1)
-    fy, cy = np.polyfit(Y[valid] / Z[valid], v[valid], 1)
-    
-    K = np.array([
-        [fx,  0, cx],
-        [ 0, fy, cy],
-        [ 0,  0,  1]
-    ])
-    return K
-
-def get_rgb_crop(rgb_image: np.ndarray, inst_mask_2d: np.ndarray, padding_px: Optional[int] = 0,
-                  target_size: Optional[Tuple]=(64, 64)) -> np.ndarray:
-    # Uses the 2D pixel mask directly to crop the RGB image
-    rows = np.any(inst_mask_2d > 0, axis=1)
-    cols = np.any(inst_mask_2d > 0, axis=0)
-    
-    if not np.any(rows) or not np.any(cols):
-        return np.zeros((target_size[1], target_size[0], 4), dtype=np.uint8)
-        
-    v_min, v_max = np.where(rows)[0][[0, -1]]
-    u_min, u_max = np.where(cols)[0][[0, -1]]
-    
-    h, w = rgb_image.shape[:2]
-    
-    v1 = max(0, v_min - padding_px)
-    v2 = min(h, v_max + padding_px)
-    u1 = max(0, u_min - padding_px)
-    u2 = min(w, u_max + padding_px)
-    
-    crop = rgb_image[v1:v2, u1:u2]
-    mask_crop = inst_mask_2d[v1:v2, u1:u2] # Crop the mask alongside the RGB
-    
-    if crop.size == 0:
-        return np.zeros((target_size[1], target_size[0], 4), dtype=np.uint8)
-        
-    crop_resized = cv2.resize(crop, target_size, interpolation=cv2.INTER_NEAREST)
-    
-    # Resize the mask (using nearest neighbor to avoid interpolation blurring)
-    mask_resized = cv2.resize(mask_crop.astype(np.uint8), target_size, interpolation=cv2.INTER_NEAREST)
-    
-    # Ensure binary format: 1 for instance, 0 otherwise
-    mask_resized = (mask_resized > 0).astype(np.uint8)
-    
-    # Expand dims to (64, 64, 1) and concatenate to create (64, 64, 4)
-    mask_resized = np.expand_dims(mask_resized, axis=-1)
-    crop_4d = np.concatenate([crop_resized, mask_resized], axis=-1)
-    
-    return crop_4d
-
-def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarray) -> Tuple[np.ndarray]:
-    """
-    Applies decoupled and coupled augmentations to a single instance.
-    pc_pts: (N, 3) 3D points of the instance
+    Applies augmentations to a single instance.
+    pc_pts: (N, 6) 3D points + RGB values of the instance
     bbox_3d: (8, 3) 3D bounding box corners
-    img_crop: (H, W, 3) RGB crop of the instance
     """
     pts_aug = pc_pts.copy()
     box_aug = bbox_3d.copy()
-    img_aug = img_crop.copy()
     
-    # Decoupled 3D (bbox and point cloud) Geometric Augmentations
+    # Separate geometry and color for easier manipulation
+    xyz = pts_aug[:, :3]
+    rgb = pts_aug[:, 3:]
+    
+    # 1. 3D Geometric Augmentations (Rotation)
     if np.random.rand() > 0.3:
         theta = np.random.uniform(-np.pi / 4, np.pi / 4)
         cos_t, sin_t = np.cos(theta), np.sin(theta)
@@ -91,40 +28,36 @@ def augment_instance(pc_pts: np.ndarray, bbox_3d: np.ndarray, img_crop: np.ndarr
             [     0, 1,     0],
             [-sin_t, 0, cos_t]
         ])
-        pts_aug = pts_aug @ R.T
+        xyz = xyz @ R.T
         box_aug = box_aug @ R.T
 
+    # 2. 3D Geometric Augmentations (Translation/Shift)
     if np.random.rand() > 0.3:
         shift = np.random.uniform(-0.05, 0.05, size=(1, 3)) 
-        pts_aug += shift
+        xyz += shift
         box_aug += shift
         
-    # Decoupled 2D Image Augmentations
+    # 3. Color Augmentations (Brightness Jittering)
     if np.random.rand() > 0.3:
         factor = np.random.uniform(0.7, 1.3)
-        img_aug = cv2.convertScaleAbs(img_aug, alpha=factor, beta=0)
-
-    # if np.random.rand() > 0.3:
-    #     h, w = img_aug.shape[:2]
-    #     crop_h, crop_w = int(h * 0.3), int(w * 0.3)
-    #     x = np.random.randint(0, w - crop_w)
-    #     y = np.random.randint(0, h - crop_h)
-    #     img_aug[y:y+crop_h, x:x+crop_w] = 0 
+        # Safely scale colors and clip to prevent blowing out the values
+        max_val = 255.0 if rgb.max() > 1.0 else 1.0
+        rgb = np.clip(rgb * factor, 0, max_val)
         
-    # 3. Coupled 2D-3D Augmentation (Horizontal Flip)
+    # 4. Coupled Geometric Augmentation (Horizontal Flip)
     if np.random.rand() > 0.5:
-        img_aug = cv2.flip(img_aug, 1) 
-        pts_aug[:, 0] = -pts_aug[:, 0]
+        xyz[:, 0] = -xyz[:, 0]
         box_aug[:, 0] = -box_aug[:, 0]
         
         # --- Reorder the corners to maintain orientation ---
-        # [0,1,2,3] is the bottom ring, [4,5,6,7] is the top ring.
-        # Left/Right pairs: (0,1), (3,2), (4,5), (7,6)
-        
         swap_indices = [1, 0, 3, 2, 5, 4, 7, 6] 
         box_aug = box_aug[swap_indices]
 
-    return pts_aug, box_aug, img_aug
+    # Recombine augmented XYZ and RGB
+    pts_aug[:, :3] = xyz
+    pts_aug[:, 3:] = rgb
+
+    return pts_aug, box_aug
 
 def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     """
@@ -190,7 +123,8 @@ def extract_3d_bbox_params(box: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
     
     return center, dims, rot_6d
 
-def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tensor:
+def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor, 
+                    output_rot_mat: Optional[bool] = False) -> Tuple[Tensor, Optional[Tensor]]:
     """
     Reconstructs unique (8, 3) bounding box from parameters.
     3D rotation is unique and continous as shown in
@@ -252,6 +186,9 @@ def reconstruct_unique_box(center: Tensor, dims: Tensor, rot_6d: Tensor) -> Tens
     # Return original shape if it wasn't batched
     if not is_batched:
         box = box.squeeze(0)
+        
+    if output_rot_mat:
+        return box, R
         
     return box
 

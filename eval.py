@@ -12,7 +12,6 @@ from utilities.utils import reconstruct_unique_box
 
 
 def draw_axes(center, dims, rot6d, color, ax):
-# --- Helper function to draw 6D Rot Axes scaled by Dimensions ---
     w, h, _ = dims # Extract Width and Height for scaling
     
     v1_raw = rot6d[:3]
@@ -29,43 +28,35 @@ def draw_axes(center, dims, rot6d, color, ax):
     
     # Draw X-axis (solid)
     ax.quiver(center[0], center[1], center[2], 
-                    x_scaled[0], x_scaled[1], x_scaled[2], 
-                    color=color, arrow_length_ratio=0.15, linewidth=2)
+              x_scaled[0], x_scaled[1], x_scaled[2], 
+              color=color, arrow_length_ratio=0.15, linewidth=2)
     # Draw Y-axis (dotted to distinguish from X)
     ax.quiver(center[0], center[1], center[2], 
-                    y_scaled[0], y_scaled[1], y_scaled[2], 
-                    color=color, arrow_length_ratio=0.15, linewidth=2, linestyle=":")
-    
+              y_scaled[0], y_scaled[1], y_scaled[2], 
+              color=color, arrow_length_ratio=0.15, linewidth=2, linestyle=":")
         
-def visualize_eval_sample(img_tensor: Tensor, pc_tensor: Tensor, 
+
+def visualize_eval_sample(pc_tensor: Tensor, 
                           gt_box: np.ndarray, pred_box: np.ndarray, 
                           gt_c: np.ndarray, pred_c: np.ndarray,
                           gt_s: np.ndarray, pred_s: np.ndarray,
                           gt_rot6d: np.ndarray, pred_rot6d: np.ndarray,
                           sample_key: str):
     """
-    Plots the RGB image with mask on the left.
-    Plots the Point Cloud, GT Box (Green), Pred Box (Red), Centers, and Axes on the right.
+    Plots the Colored Point Cloud, GT Box (Green), Pred Box (Red), Centers, and Axes.
     """
-    fig = plt.figure(figsize=(15, 7))
+    fig = plt.figure(figsize=(10, 8))
     
-    # --- Left: RGB + Mask ---
-    ax_img = fig.add_subplot(1, 2, 1)
-    img_display = img_tensor[:3].permute(1, 2, 0).cpu().numpy()
-    ax_img.imshow(img_display)
+    ax_3d = fig.add_subplot(1, 1, 1, projection="3d")
+    ax_3d.set_title(f"Sample: {sample_key}\nColored Point Cloud & Bounding Boxes")
     
-    mask_display = img_tensor[3].cpu().numpy()
-    ax_img.imshow(np.ma.masked_where(mask_display == 0, mask_display), cmap='gray_r', vmin=0, vmax=1, alpha=0.8)
-    ax_img.set_title(f"Sample: {sample_key}\nRGB + Mask")
-    ax_img.axis("off")
-    
-    # --- Right: 3D Point Cloud & Boxes ---
-    ax_3d = fig.add_subplot(1, 2, 2, projection="3d")
     pc_pts = pc_tensor.cpu().numpy()
     
-    # Subsample points for speed
-    non_zero_mask = np.any(pc_pts != 0, axis=1)
+    # Filter out zero-padded rows based on XYZ coordinates
+    non_zero_mask = np.any(pc_pts[:, :3] != 0, axis=1)
     valid_pts = pc_pts[non_zero_mask]
+    
+    # Subsample points for speed
     if len(valid_pts) > 2000:
         idx = np.random.choice(len(valid_pts), 2000, replace=False)
         pts = valid_pts[idx]
@@ -73,7 +64,14 @@ def visualize_eval_sample(img_tensor: Tensor, pc_tensor: Tensor,
         pts = valid_pts
 
     if len(pts) > 0:
-        ax_3d.scatter(pts[:, 0], pts[:, 1], pts[:, 2], s=1, c="blue", alpha=0.2, label="Point Cloud")
+        xyz = pts[:, :3]
+        colors = pts[:, 3:]
+        
+        # Normalize RGB for matplotlib (0.0 to 1.0)
+        if colors.max() > 1.0:
+            colors = colors / 255.0
+            
+        ax_3d.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=5, c=colors, alpha=0.8, label="Point Cloud")
 
     edges = [
         (0, 1), (1, 2), (2, 3), (3, 0), # Bottom
@@ -133,7 +131,6 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     
     # 3. Load Model from Checkpoint
     from config import NetConfig, TrainConfig
-    torch.serialization.add_safe_globals([NetConfig, TrainConfig])
     print(f"Loading model from {checkpoint_path}...")
     model = TrainerLitModule.load_from_checkpoint(checkpoint_path)
     model.to(device)
@@ -157,7 +154,8 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             targ_corners = batch["bbox_3d"].to(device)
             
             # Forward Pass
-            pred_c, pred_s, pred_rot6d = model(pc_pts)
+            end_points = model(pc_pts)
+            pred_c, pred_s, pred_rot6d = end_points["center"], end_points["size"], end_points["rot_6d"]
             
             # Reconstruct Predicted Corners
             pred_corners = reconstruct_unique_box(pred_c, pred_s, pred_rot6d)
@@ -186,7 +184,6 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
                         break
                     
                     visualize_eval_sample(
-                        img_tensor=batch["img_crop"][i],
                         pc_tensor=batch["pc_pts"][i],
                         gt_box=targ_corners[i].cpu().numpy(),
                         pred_box=pred_corners[i].cpu().numpy(),
@@ -216,7 +213,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     print("="*40)
 
 if __name__ == "__main__":
-    ckpt_name = "20260424_113344_base-epoch=28-val_loss=0.2243.ckpt"
+    ckpt_name = "20260425_103313_base-epoch=07-val_loss=0.2579.ckpt"
     CKPT_PATH = os.path.join(Paths.ckpts, ckpt_name.split("-")[0], ckpt_name)
     
     evaluate_model(
