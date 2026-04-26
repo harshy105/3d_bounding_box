@@ -9,7 +9,7 @@
 
 ## 1. Project Overview & Architecture
 
-This repository contains an end-to-end deep learning pipeline for predicting full 3D bounding boxes for highly occluded objects. Because classical methods (like PCA) fail when geometry is missing, this project utilizes an amodal, learning-based instance regression approach.
+This repository contains a lightweight end-to-end deep learning pipeline for predicting full 3D bounding boxes for highly occluded objects. Because classical methods (like PCA) fail when geometry is missing, this project utilizes an amodal, learning-based instance regression approach. ⚠️ The approach still lack perfect bounding box prediction capabilities, nonetheless it does cover some of the important aspect of the 3D Bounding Boxes problem. 
 
 ### 1.1 Data Formulation
 * **Input Representation:** Fused **(N, 6)** point clouds (XYZ + normalized RGB) cached in LMDB for high-speed I/O.
@@ -46,3 +46,50 @@ conda env create -f environment.yml
 
 # Activate the new environment
 conda activate 3d_bb
+```
+
+### 2.2 Configure Build Environment
+To build custom CUDA extensions, the compiler needs to know exactly where the CUDA headers and binaries are located within your Conda environment.
+
+```bash
+# Set environment variables for the compiler
+export CUDA_HOME=$CONDA_PREFIX
+export CPATH=$CONDA_PREFIX/include:$CPATH
+```
+
+### 2.3 Clone and Fix PointNet2 Operators
+The original repository uses deprecated PyTorch syntax (AT_CHECK) which causes compilation failures on modern PyTorch versions (2.0+). We apply a suppression fix using sed to update the source code to use TORCH_CHECK.
+
+```bash
+# Clone the repository
+cd ~/
+git clone https://github.com/erikwijmans/Pointnet2_PyTorch.git
+
+# Navigate to the operator library
+cd ~/Pointnet2_PyTorch/pointnet2_ops_lib
+
+# Apply "Suppression Stuff" - Update old AT_CHECK syntax to modern TORCH_CHECK
+sed -i 's/AT_CHECK/TORCH_CHECK/g' pointnet2_ops/_ext-src/src/*.cpp
+sed -i 's/AT_CHECK/TORCH_CHECK/g' pointnet2_ops/_ext-src/src/*.cu
+
+```
+### 2.4. Compile and Install
+Build the custom C++ and CUDA kernels. We disable build isolation to ensure the installation uses the PyTorch and CUDA versions already present in the Conda environment.
+
+```bash
+# Final Build and installation in editable mode
+pip install --no-build-isolation -e .
+```
+### 2.5 Return to Main Project
+Once the installation is successful, move back to your original project root to begin training or inference.
+
+```bash
+# Navigate back to the main directory
+cd ../..
+```
+## Verification
+To verify that the operators were installed correctly and can interface with your GPU, run:
+
+```bash
+python -c "import pointnet2_ops; print('PointNet2 Ops successfully installed')"
+```
