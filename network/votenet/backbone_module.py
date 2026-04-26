@@ -43,7 +43,7 @@ class Pointnet2Backbone(nn.Module):
             Number of input channels in the feature descriptor for each point.
             e.g. 3 for RGB.
     """
-    def __init__(self, input_feature_dim=0):
+    def __init__(self, input_feature_dim, num_seeds):
         super().__init__()
 
         self.sa1 = PointnetSAModuleVotes(
@@ -65,7 +65,7 @@ class Pointnet2Backbone(nn.Module):
         )
 
         self.sa3 = PointnetSAModuleVotes(
-            npoint=32,
+            npoint=num_seeds,
             radius=0.8,
             nsample=16,
             mlp=[128, 128, 128, 256], 
@@ -125,7 +125,10 @@ class Pointnet2Backbone(nn.Module):
         return end_points
     
 if __name__=='__main__':
-    backbone_net = Pointnet2Backbone(input_feature_dim=3).cuda()
+    backbone_net = Pointnet2Backbone(
+        input_feature_dim=3,
+        num_seeds=32,
+        ).cuda()
     print(backbone_net)
     backbone_net.eval()
     out = backbone_net(torch.rand(16,20000,6).cuda())

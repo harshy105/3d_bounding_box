@@ -52,13 +52,19 @@ class VoteNet(nn.Module):
 
         self.input_feature_dim = config.input_feature_dim
 
-        self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+        self.backbone_net = Pointnet2Backbone(
+            input_feature_dim=self.input_feature_dim,
+            num_seeds=config.num_proposal_seeds
+        )
         
         self.vgen = VotingModule(config.voting_factor, 
                             seed_feature_dim=config.seed_feature_dim)
 
-        self.pnet = ProposalModule(num_proposal=config.num_proposal, 
-                            seed_feat_dim=config.seed_feature_dim)
+        self.pnet = ProposalModule(
+            num_proposal=config.num_proposal, 
+            seed_feat_dim=config.seed_feature_dim,
+            num_votes=config.num_proposal_seeds*config.voting_factor
+        )
 
     def forward(self, pc_pts):
         """

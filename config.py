@@ -24,6 +24,7 @@ class NetConfig:
     seed_feature_dim: int = 256
     voting_factor: int = 1
     num_proposal: int = 1
+    num_proposal_seeds: int = 32
 
 @dataclass
 class TrainConfig:
