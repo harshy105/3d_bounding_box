@@ -86,7 +86,7 @@ if __name__ == "__main__":
                 continue
                 
             # Extract matching RGB pixels (N, 3)
-            rgb = img[valid_pixels]
+            rgb = img[valid_pixels] / 255 # normalize the colors
             
             # Concatenate XYZ and RGB to create an (N, 6) point cloud
             pc_pts = np.hstack((xyz, rgb))

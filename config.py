@@ -39,7 +39,7 @@ class TrainConfig:
     lr: float = 1e-3
     min_lr: float = 1e-5
     weight_decay: float = 1e-5
-    max_epochs: int = 30
+    max_epochs: int = 40
     center_loss_weight: float = 1.0
     dim_loss_weight: float = 1.0
     rot_loss_weight: float = 1.0

@@ -66,11 +66,8 @@ def visualize_eval_sample(pc_tensor: Tensor,
     if len(pts) > 0:
         xyz = pts[:, :3]
         colors = pts[:, 3:]
+        assert colors.max() <= 1.0
         
-        # Normalize RGB for matplotlib (0.0 to 1.0)
-        if colors.max() > 1.0:
-            colors = colors / 255.0
-            
         ax_3d.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=5, c=colors, alpha=0.8, label="Point Cloud")
 
     edges = [
@@ -247,7 +244,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     print("="*40)
 
 if __name__ == "__main__":
-    ckpt_name = "20260426_131833_base-epoch=14-val_loss=0.2555.ckpt"
+    ckpt_name = "20260426_143358_base-epoch=29-val_loss=0.2060.ckpt"
     CKPT_PATH = os.path.join(Paths.ckpts, ckpt_name.split("-")[0], ckpt_name)
     
     evaluate_model(
