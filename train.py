@@ -51,20 +51,38 @@ class EpochTextLoggerCallback(Callback):
         if trainer.sanity_checking:
             return
 
-        # Lightning stores all self.log() outputs in trainer.callback_metrics
         metrics = trainer.callback_metrics
         epoch = trainer.current_epoch
 
-        # Safely extract the metrics (they are stored as single-value tensors)
         train_loss = metrics.get("train_loss")
         val_loss = metrics.get("val_loss")
+        
+        val_loss_center = metrics.get("val_loss_center")
+        val_loss_dims = metrics.get("val_loss_dims")
+        val_loss_rot = metrics.get("val_loss_rot")
+        val_loss_corner = metrics.get("val_loss_corner")
 
-        log_str = f"Epoch {epoch:03d} Summary | "
+        parts = [f"Epoch {epoch:03d} Summary"]
+        
         if train_loss is not None:
-            log_str += f"Train Loss: {train_loss.item():.4f} | "
+            parts.append(f"Train Loss: {train_loss.item():.4f}")
         if val_loss is not None:
-            log_str += f"Val Loss: {val_loss.item():.4f}"
+            parts.append(f"Val Loss: {val_loss.item():.4f}")
+            
+        components = []
+        if val_loss_center is not None:
+            components.append(f"Val Center Loss: {val_loss_center.item():.4f}")
+        if val_loss_dims is not None:
+            components.append(f"Val Dims Loss: {val_loss_dims.item():.4f}")
+        if val_loss_rot is not None:
+            components.append(f"Val Rot Loss: {val_loss_rot.item():.4f}")
+        if val_loss_corner is not None:
+            components.append(f"Val Corner Loss: {val_loss_corner.item():.4f}")
+            
+        if components:
+            parts.append("[" + ", ".join(components) + "]")
 
+        log_str = " | ".join(parts)
         self.text_logger.info(log_str)
 
 class EarlyStopOnMinLR(Callback):
@@ -107,21 +125,16 @@ if __name__ == "__main__":
     text_logger = setup_text_logger(run_log_dir, run_name)
     text_logger.info(f"Initialized Configuration for run: {run_name}")
     
-    # Initialize all configurations
     dl_cfg = DataLoaderConfig()
     net_cfg = NetConfig()
     train_cfg = TrainConfig()
     
-    # Initialize the DataModule
     data_module = InstanceDataModule(
         parsed_data_path=Paths.parsed_data, 
         data_loader_config=dl_cfg
     )
-    
-    # Initialize the Lightning Module
     model = TrainerLitModule(net_cfg, train_cfg)
     
-    # Configure TensorBoard Logger 
     tb_logger = TensorBoardLogger(
         save_dir=Paths.logs,
         name=run_name,
