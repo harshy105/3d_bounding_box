@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 
 import pytorch_lightning as pl
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from network.votenet.votenet import VoteNet
 from network.loss_helper import InstanceBoxLoss
@@ -22,7 +23,7 @@ class TrainerLitModule(pl.LightningModule):
         return self.model(x)
 
     def shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tuple[Tensor, Dict[str, int]]:
-        pc_pts = batch["pc_pts"]            # (B, N, 3)
+        pc_pts = batch["pc_pts"]            # (B, N, 3) or (B, N, 6)
         targ_c = batch["bbox_center"]       # (B, 3)
         targ_s = batch["bbox_dims"]         # (B, 3)
         targ_rot6d = batch["bbox_rot_6d"]   # (B, 6)
@@ -64,10 +65,28 @@ class TrainerLitModule(pl.LightningModule):
             
         return loss
 
-    def configure_optimizers(self) -> AdamW:
+    def configure_optimizers(self) -> Dict[str, Any]:
         optimizer = AdamW(
             self.parameters(), 
             lr=self.train_cfg.lr, 
             weight_decay=self.train_cfg.weight_decay
         )
-        return optimizer
+        
+        # --- NEW: Learning Rate Scheduler ---
+        # Reduces LR by factor of 0.1 if val_loss doesn't improve for 3 epochs
+        scheduler = ReduceLROnPlateau(
+            optimizer, 
+            mode='min', 
+            factor=0.1, 
+            patience=3, 
+            verbose=True # Prints a message to console when LR drops
+        )
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "frequency": 1
+            }
+        }
