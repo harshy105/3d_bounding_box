@@ -51,19 +51,25 @@ class VoteNet(nn.Module):
         super().__init__()
 
         self.input_feature_dim = config.input_feature_dim
+        self.use_voting_module = config.use_voting_module
 
         self.backbone_net = Pointnet2Backbone(
             input_feature_dim=self.input_feature_dim,
             num_seeds=config.num_proposal_seeds
         )
         
-        self.vgen = VotingModule(config.voting_factor, 
-                            seed_feature_dim=config.seed_feature_dim)
+        if self.use_voting_module:
+            self.vgen = VotingModule(
+                config.voting_factor, 
+                seed_feature_dim=config.seed_feature_dim,
+            )
 
         self.pnet = ProposalModule(
             num_proposal=config.num_proposal, 
             seed_feat_dim=config.seed_feature_dim,
-            num_votes=config.num_proposal_seeds*config.voting_factor
+            num_votes=config.num_proposal_seeds*config.voting_factor,
+            use_pointnet_agg=config.use_pointnet_agg,
+            dropout=config.dropout
         )
 
     def forward(self, pc_pts):
@@ -85,15 +91,10 @@ class VoteNet(nn.Module):
 
         xyz = end_points['sa3_xyz']
         features = end_points['sa3_features']
-        end_points['seed_inds'] = end_points['sa3_inds']
-        end_points['seed_xyz'] = xyz
-        end_points['seed_features'] = features
-        
-        xyz, features = self.vgen(xyz, features)
-        features_norm = torch.norm(features, p=2, dim=1)
-        features = features.div(features_norm.unsqueeze(1))
-        end_points['vote_xyz'] = xyz
-        end_points['vote_features'] = features
+        if self.use_voting_module:
+            xyz, features = self.vgen(xyz, features)
+            features_norm = torch.norm(features, p=2, dim=1)
+            features = features.div(features_norm.unsqueeze(1))
 
         end_points = self.pnet(xyz, features, end_points)
 
