@@ -32,7 +32,7 @@ class NetConfig:
 class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-5
-    max_epochs: int = 15
+    max_epochs: int = 10
     center_loss_weight: float = 1.0
     dim_loss_weight: float = 1.0
     rot_loss_weight: float = 1.0
