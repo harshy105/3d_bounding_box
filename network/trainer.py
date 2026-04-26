@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Tuple, Dict
+from typing import TYPE_CHECKING, Tuple, Dict, Any
 from torch import Tensor
 if TYPE_CHECKING:
     from config import NetConfig, TrainConfig
