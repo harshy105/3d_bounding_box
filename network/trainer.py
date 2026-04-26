@@ -20,7 +20,8 @@ class TrainerLitModule(pl.LightningModule):
         self.train_cfg = train_config
 
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        return self.model(x)
+        end_points = self.model(x)
+        return end_points["center"], end_points["size"], end_points["rot_6d"]
 
     def shared_step(self, batch: Dict[str, Tensor], batch_idx: int) -> Tuple[Tensor, Dict[str, int]]:
         pc_pts = batch["pc_pts"]            # (B, N, 3) or (B, N, 6)
@@ -29,13 +30,12 @@ class TrainerLitModule(pl.LightningModule):
         targ_rot6d = batch["bbox_rot_6d"]   # (B, 6)
         targ_corners = batch["bbox_3d"]     # (B, 8, 3)
 
-        # Forward pass
-        end_points = self(pc_pts)
+        pred_c, pred_s, pred_rot6d = self(pc_pts)
 
         # Compute Loss
         loss, loss_dict = self.criterion(
             targ_c, targ_s, targ_rot6d, targ_corners,
-            end_points["center"], end_points["size"], end_points["rot_6d"], 
+            pred_c, pred_s, pred_rot6d, 
         )
         return loss, loss_dict
 
@@ -72,14 +72,12 @@ class TrainerLitModule(pl.LightningModule):
             weight_decay=self.train_cfg.weight_decay
         )
         
-        # --- NEW: Learning Rate Scheduler ---
-        # Reduces LR by factor of 0.1 if val_loss doesn't improve for 3 epochs
         scheduler = ReduceLROnPlateau(
             optimizer, 
             mode='min', 
             factor=0.1, 
             patience=3, 
-            verbose=True # Prints a message to console when LR drops
+            verbose=True
         )
         
         return {

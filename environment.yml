@@ -23,3 +23,5 @@ dependencies:
       - matplotlib
       - lmdb
       - tensorboard
+      - onnx
+      - onnxruntime

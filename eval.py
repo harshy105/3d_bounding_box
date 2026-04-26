@@ -136,6 +136,29 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     model.to(device)
     model.eval()
 
+    onnx_path =  os.path.splitext(checkpoint_path)[0] + ".onnx"
+    print(f"Exporting model to ONNX: {onnx_path}")
+    
+    # Create a dummy input to trace the model's graph. 
+    num_channels = 3 + model.model.input_feature_dim
+    dummy_input = torch.randn(1, dl_cfg.max_number_pc_pts, num_channels, device=device)
+    
+    model.to_onnx(
+        onnx_path,
+        dummy_input,
+        export_params=True,
+        opset_version=14,
+        input_names=["pc_pts"],
+        output_names=["center", "size", "rot_6d"],
+        dynamic_axes={
+            "pc_pts": {0: "batch_size", 1: "num_points"},
+            "center": {0: "batch_size"},
+            "size":   {0: "batch_size"},
+            "rot_6d": {0: "batch_size"}
+        }
+    )
+    print(f"ONNX export successfully saved alongside the checkpoint!")
+
     # Metrics trackers
     total_center_err = 0.0
     total_dim_err = 0.0
@@ -154,8 +177,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             targ_corners = batch["bbox_3d"].to(device)
             
             # Forward Pass
-            end_points = model(pc_pts)
-            pred_c, pred_s, pred_rot6d = end_points["center"], end_points["size"], end_points["rot_6d"]
+            pred_c, pred_s, pred_rot6d = model(pc_pts)
             
             # Reconstruct Predicted Corners
             if pred_rot6d is not None and pred_s is not None:
@@ -163,7 +185,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             else:
                 pred_corners = pred_c.unsqueeze(1).repeat(1, 8, 1)
             
-            # Setting sides and angles to zero is not predicted
+            # Setting sides and angles to zero if not predicted
             pred_s = torch.zeros_like(pred_c) if pred_s is None else pred_s
             pred_rot6d = torch.concat(
                 [
@@ -231,5 +253,5 @@ if __name__ == "__main__":
     evaluate_model(
         checkpoint_path=CKPT_PATH, 
         split="test", 
-        num_vis_samples=20,
+        num_vis_samples=0,
     )
