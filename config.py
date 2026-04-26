@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Tuple
+from enum import Enum
 
 @dataclass
 class Paths:
@@ -27,7 +28,12 @@ class NetConfig:
     num_proposal_seeds: int = 32
     use_voting_module: bool = False
     use_pointnet_agg: bool = False
-
+    
+class RotationLossType(Enum):
+    geodesic_rot_mat = 1
+    mse_rot_mat = 2
+    mse_6d_vec = 3
+    
 @dataclass
 class TrainConfig:
     lr: float = 1e-3
@@ -37,3 +43,4 @@ class TrainConfig:
     dim_loss_weight: float = 1.0
     rot_loss_weight: float = 1.0
     corner_loss_weight: float = 1.0
+    rotation_loss_type: RotationLossType = RotationLossType.mse_6d_vec
