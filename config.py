@@ -21,13 +21,18 @@ class DataLoaderConfig:
 class NetConfig:
     input_feature_dim : int = 3 # for RGB
     dropout: float = 0.4
-    proposal_hid_dim: int = 256
+    seed_feature_dim: int = 256
+    voting_factor: int = 1
+    num_proposal: int = 1
+    num_proposal_seeds: int = 32
+    use_voting_module: bool = False
+    use_pointnet_agg: bool = False
 
 @dataclass
 class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-5
-    max_epochs: int = 50
+    max_epochs: int = 10
     center_loss_weight: float = 1.0
     dim_loss_weight: float = 1.0
     rot_loss_weight: float = 1.0

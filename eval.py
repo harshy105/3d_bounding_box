@@ -158,7 +158,19 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             pred_c, pred_s, pred_rot6d = end_points["center"], end_points["size"], end_points["rot_6d"]
             
             # Reconstruct Predicted Corners
-            pred_corners = reconstruct_unique_box(pred_c, pred_s, pred_rot6d)
+            if pred_rot6d is not None and pred_s is not None:
+                pred_corners = reconstruct_unique_box(pred_c, pred_s, pred_rot6d)
+            else:
+                pred_corners = pred_c.unsqueeze(1).repeat(1, 8, 1)
+            
+            # Setting sides and angles to zero is not predicted
+            pred_s = torch.zeros_like(pred_c) if pred_s is None else pred_s
+            pred_rot6d = torch.concat(
+                [
+                    torch.zeros_like(pred_c),
+                    torch.zeros_like(pred_c)
+                ], dim = -1,
+            ) if pred_rot6d is None else pred_rot6d            
             
             # --- Quantitative Metrics ---
             # 1. Center Error (L2 Distance in meters)
@@ -213,7 +225,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     print("="*40)
 
 if __name__ == "__main__":
-    ckpt_name = "20260425_103313_base-epoch=07-val_loss=0.2579.ckpt"
+    ckpt_name = "20260426_110148_base-epoch=09-val_loss=0.2593.ckpt"
     CKPT_PATH = os.path.join(Paths.ckpts, ckpt_name.split("-")[0], ckpt_name)
     
     evaluate_model(

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 import pytorch_lightning as pl
 from torch.optim import AdamW
 
-from network.votenet.votenet_small import VoteNet
+from network.votenet.votenet import VoteNet
 from network.loss_helper import InstanceBoxLoss
 
 class TrainerLitModule(pl.LightningModule):
@@ -33,8 +33,8 @@ class TrainerLitModule(pl.LightningModule):
 
         # Compute Loss
         loss, loss_dict = self.criterion(
+            targ_c, targ_s, targ_rot6d, targ_corners,
             end_points["center"], end_points["size"], end_points["rot_6d"], 
-            targ_c, targ_s, targ_rot6d, targ_corners
         )
         return loss, loss_dict
 

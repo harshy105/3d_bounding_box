@@ -25,8 +25,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from network.votenet.backbone_small_module import Pointnet2Backbone
-from network.votenet.proposal_small_module import BboxRegressionHead
+from network.votenet.backbone_module import Pointnet2Backbone
+from network.votenet.proposal_module import ProposalModule
+from network.votenet.voting_module import VotingModule
 
 
 class VoteNet(nn.Module):
@@ -50,12 +51,26 @@ class VoteNet(nn.Module):
         super().__init__()
 
         self.input_feature_dim = config.input_feature_dim
+        self.use_voting_module = config.use_voting_module
 
-        self.backbone_net = Pointnet2Backbone(input_feature_dim=self.input_feature_dim)
+        self.backbone_net = Pointnet2Backbone(
+            input_feature_dim=self.input_feature_dim,
+            num_seeds=config.num_proposal_seeds
+        )
+        
+        if self.use_voting_module:
+            self.vgen = VotingModule(
+                config.voting_factor, 
+                seed_feature_dim=config.seed_feature_dim,
+            )
 
-        # Direct regression head → 12 box params
-        self.bbox_head = BboxRegressionHead(feat_dim=config.proposal_hid_dim, 
-                                            dropout=config.dropout)
+        self.pnet = ProposalModule(
+            num_proposal=config.num_proposal, 
+            seed_feat_dim=config.seed_feature_dim,
+            num_votes=config.num_proposal_seeds*config.voting_factor,
+            use_pointnet_agg=config.use_pointnet_agg,
+            dropout=config.dropout
+        )
 
     def forward(self, pc_pts):
         """
@@ -74,20 +89,13 @@ class VoteNet(nn.Module):
 
         end_points = self.backbone_net(pc_pts, end_points)
 
-        features = end_points['sa3_features']   
-        xyz      = end_points['sa3_xyz']   
+        xyz = end_points['sa3_xyz']
+        features = end_points['sa3_features']
+        if self.use_voting_module:
+            xyz, features = self.vgen(xyz, features)
+            features_norm = torch.norm(features, p=2, dim=1)
+            features = features.div(features_norm.unsqueeze(1))
 
-        end_points = self.bbox_head(features, xyz, end_points)
+        end_points = self.pnet(xyz, features, end_points)
 
         return end_points
-
-
-if __name__ == '__main__':
-    B = 8
-    inputs = {'point_clouds': torch.rand((B, 2048, 3)).cuda()}
-    model = VoteNet(input_feature_dim=0, dropout=0.4).cuda()
-    end_points = model(inputs)
-    print('center  ', end_points['center'].shape)   
-    print('size    ', end_points['size'].shape)     
-    print('rot_6d  ', end_points['rot_6d'].shape)  
-    print('rot_mat ', end_points['rot_mat'].shape) 
