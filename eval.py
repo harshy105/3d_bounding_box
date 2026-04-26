@@ -12,6 +12,7 @@ from utilities.utils import reconstruct_unique_box
 
 
 def draw_axes(center, dims, rot6d, color, ax):
+    """Draws X and Y axes for a given bounding box to visualize its orientation."""
     w, h, _ = dims # Extract Width and Height for scaling
     
     v1_raw = rot6d[:3]
@@ -43,7 +44,8 @@ def visualize_eval_sample(pc_tensor: Tensor,
                           gt_rot6d: np.ndarray, pred_rot6d: np.ndarray,
                           sample_key: str):
     """
-    Plots the Colored Point Cloud, GT Box (Green), Pred Box (Red), Centers, and Axes.
+    Creates a detailed plot comparing the ground truth and predicted bounding boxes,
+    including their centers and orientation axes.
     """
     fig = plt.figure(figsize=(10, 8))
     
@@ -52,11 +54,11 @@ def visualize_eval_sample(pc_tensor: Tensor,
     
     pc_pts = pc_tensor.cpu().numpy()
     
-    # Filter out zero-padded rows based on XYZ coordinates
+    # Filter out any zero-padding from the point cloud
     non_zero_mask = np.any(pc_pts[:, :3] != 0, axis=1)
     valid_pts = pc_pts[non_zero_mask]
     
-    # Subsample points for speed
+    # Subsample for faster plotting
     if len(valid_pts) > 2000:
         idx = np.random.choice(len(valid_pts), 2000, replace=False)
         pts = valid_pts[idx]
@@ -76,21 +78,21 @@ def visualize_eval_sample(pc_tensor: Tensor,
         (0, 4), (1, 5), (2, 6), (3, 7)  # Pillars
     ]
 
-    # Draw Ground Truth Box (Green)
+    # Plot the ground truth box in green
     for i, edge in enumerate(edges):
         ax_3d.plot(gt_box[list(edge), 0], gt_box[list(edge), 1], gt_box[list(edge), 2], 
                    c="green", linewidth=2, label="Ground Truth" if i == 0 else "")
 
-    # Draw Predicted Box (Red)
+    # Plot the predicted box in red
     for i, edge in enumerate(edges):
         ax_3d.plot(pred_box[list(edge), 0], pred_box[list(edge), 1], pred_box[list(edge), 2], 
                    c="red", linewidth=2, linestyle="--", label="Prediction" if i == 0 else "")
 
-    # --- Visualize Centers ---
+    # Show the centers as stars
     ax_3d.scatter(gt_c[0], gt_c[1], gt_c[2], c="green", s=150, marker="*", label="GT Center")
     ax_3d.scatter(pred_c[0], pred_c[1], pred_c[2], c="red", s=150, marker="*", label="Pred Center")
 
-    # Draw Axes
+    # Draw the orientation axes
     draw_axes(gt_c, gt_s, gt_rot6d, color="green", ax=ax_3d)
     draw_axes(pred_c, pred_s, pred_rot6d, color="red", ax=ax_3d)
 
@@ -111,7 +113,9 @@ def visualize_eval_sample(pc_tensor: Tensor,
 
 
 def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: int = 5):
-    # 1. Setup Device and Configs
+    """The main evaluation script. It loads a model, runs it on a dataset, 
+    calculates error metrics, and can export the model to ONNX.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dl_cfg = DataLoaderConfig()
     
@@ -119,20 +123,21 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     dl_cfg.apply_aug = False 
     dl_cfg.shuffle = False
     
-    # 2. Load Dataset
+    # Load the dataset
     dataset_path = os.path.join(Paths.parsed_data, split)
     dataset = LMDBInstanceDataset(dataset_path, data_loader_config=dl_cfg, apply_aug=False)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=dl_cfg.batch_size, shuffle=False)
     
     print(f"Loaded {len(dataset)} samples for {split} evaluation.")
     
-    # 3. Load Model from Checkpoint
+    # Load the trained model from a checkpoint.
     from config import NetConfig, TrainConfig
     print(f"Loading model from {checkpoint_path}...")
     model = TrainerLitModule.load_from_checkpoint(checkpoint_path)
     model.to(device)
     model.eval()
 
+    # Export the model to ONNX format for deployment.
     onnx_path =  os.path.splitext(checkpoint_path)[0] + ".onnx"
     print(f"Exporting model to ONNX: {onnx_path}")
     
@@ -156,7 +161,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     )
     print(f"ONNX export successfully saved alongside the checkpoint!")
 
-    # Metrics trackers
+    # Keep track of our error metrics.
     total_center_err = 0.0
     total_dim_err = 0.0
     total_corner_err = 0.0
@@ -166,7 +171,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
     print("Starting evaluation...")
     with torch.no_grad():
         for batch in tqdm(dataloader):
-            # Move data to device
+            # Move data to the GPU
             pc_pts = batch["pc_pts"].to(device)
             targ_c = batch["bbox_center"].to(device)
             targ_s = batch["bbox_dims"].to(device)
@@ -182,7 +187,7 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
             else:
                 pred_corners = pred_c.unsqueeze(1).repeat(1, 8, 1)
             
-            # Setting sides and angles to zero if not predicted
+            # If the model doesn't predict size or rotation, use zeros as placeholders.
             pred_s = torch.zeros_like(pred_c) if pred_s is None else pred_s
             pred_rot6d = torch.concat(
                 [
@@ -191,24 +196,24 @@ def evaluate_model(checkpoint_path: str, split: str = "test", num_vis_samples: i
                 ], dim = -1,
             ) if pred_rot6d is None else pred_rot6d            
             
-            # --- Quantitative Metrics ---
-            # 1. Center Error (L2 Distance in meters)
+            # Calculate our quantitative metrics.
+            # Center Error: L2 distance between predicted and target centers.
             center_dist = torch.norm(pred_c - targ_c, dim=1)
             
-            # 2. Dimension Error (Mean Absolute Error across W, H, L)
+            # Dimension Error: Mean absolute error for width, height, and length.
             dim_err = torch.abs(pred_s - targ_s).mean(dim=1)
             
-            # 3. Corner Error (Mean L2 distance between corresponding corners)
+            # Corner Error: Mean L2 distance between corresponding corners.
             corner_dist = torch.norm(pred_corners - targ_corners, dim=2).mean(dim=1)
             
-            # Accumulate
+            # Accumulate the errors for this batch.
             batch_size = pc_pts.shape[0]
             total_center_err += center_dist.sum().item()
             total_dim_err += dim_err.sum().item()
             total_corner_err += corner_dist.sum().item()
             num_samples += batch_size
             
-            # --- Qualitative Visualization ---
+            # Visualize a few samples
             if vis_count < num_vis_samples:
                 for i in range(batch_size):
                     if vis_count >= num_vis_samples:

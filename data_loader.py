@@ -29,15 +29,15 @@ class LMDBInstanceDataset(Dataset):
         self.env = None
         self.vis_sample = vis_sample
         
-        # Open environment once just to extract the keys, then close it. 
-        # This prevents multiprocessing crashes with PyTorch workers.
+        # We open the environment once to get the keys, then close it.
+        # This helps prevent multiprocessing issues with PyTorch workers.
         env = lmdb.open(self.lmdb_path, readonly=True, lock=False)
         with env.begin() as txn:
             self.keys = [key for key, _ in txn.cursor()]
         env.close()
 
     def _init_env(self) -> None:
-        # Lazy initialization for DataLoader workers
+        # Lazy-initialize the LMDB environment for each DataLoader worker.
         if self.env is None:
             self.env = lmdb.open(self.lmdb_path, readonly=True, lock=False, readahead=False, meminit=False)
 
@@ -45,6 +45,7 @@ class LMDBInstanceDataset(Dataset):
         return len(self.keys)
 
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+        """Fetches and processes a single sample from the dataset."""
         self._init_env()
         
         with self.env.begin() as txn:
@@ -53,15 +54,14 @@ class LMDBInstanceDataset(Dataset):
             
         return self.process_sample(idx, sample)
             
-    def process_sample(self, idx: int, sample: Dict[str, np.ndarray]) -> Dict[str, Tensor]:            
+    def process_sample(self, idx: int, sample: Dict[str, np.ndarray]) -> Dict[str, Tensor]:
         pc_pts = sample["pc_pts"] # shape (N, 6) position + RGB
         bbox_3d = sample["bbox_3d"]
         
-        # Apply data augmentation
         if self.apply_aug:
             pc_pts, bbox_3d = augment_instance(pc_pts, bbox_3d)
             
-        # Ensure uniform point cloud size for batching (Subsample or Zero-Pad)
+        # Subsample or zero-pad to ensure all point clouds have the same number of points for batching.
         num_current_pts = pc_pts.shape[0]
         if num_current_pts >= self.num_points:
             choice = np.random.choice(num_current_pts, self.num_points, replace=False)
@@ -73,21 +73,20 @@ class LMDBInstanceDataset(Dataset):
         
         pc_tensor = torch.from_numpy(pc_pts).float()
         
-        # Extract canonical features from the 3D bounding box and reorder the bounding
-        #  box corner sequence so that the neural network can learn in a stable manner
+        # Convert the bounding box to a canonical representation (center, dims, 6D rotation)
+        # This helps the network learn in a stable, unambiguous way.
         bbox_tensor = torch.from_numpy(bbox_3d).float()
         bbox_center, bbox_dims, bbox_rot_6d = extract_3d_bbox_params(bbox_tensor)
         
-        # Generate a unique bounding box given the bouning box parameters
+        # Reconstruct the box from our canonical parameters to get a consistent corner ordering.
         reconstructed_box = reconstruct_unique_box(bbox_center, bbox_dims, bbox_rot_6d)
         
-        # reorder original box corners based on the reconstructed box
+        # Reorder the original box corners to match the reconstructed box's order.
         reordered_bbox_tensor = reorder_original_box(bbox_tensor, reconstructed_box)
         
         assert have_identical_corner_sets(reordered_bbox_tensor, bbox_tensor), \
             f"Reordered box is not same as original box in Sample {self.keys[idx]}"
             
-        # Test whether the unique reconstructed box is actually same as some permutation of original box
         assert are_corners_close(reordered_bbox_tensor, reconstructed_box, atol=1e-3), \
             f"Reconstruction of the box is not 1-to-1 map Sample {self.keys[idx]}"
         
@@ -100,7 +99,7 @@ class LMDBInstanceDataset(Dataset):
             "key": self.keys[idx].decode('ascii')
         }
         
-        # Run tests on the sample and visualize
+        # Optional visualization for debugging.
         if self.vis_sample:
             self.visualize_sample(sample_processed, reordered_bbox_tensor)
         
@@ -162,14 +161,14 @@ class InstanceDataModule(LightningDataModule):
         )
 
 if __name__ == "__main__":
-    # Test the Dataset and the Validation logic
+    # A simple test to check the dataset and visualization logic.
     from config import Paths
     from config import DataLoaderConfig
     split = "val"
     dataset = LMDBInstanceDataset(os.path.join(Paths.parsed_data, split), data_loader_config=DataLoaderConfig(),
                                   apply_aug=True, vis_sample=True)
     
-    # Check if the dataset contains any samples before starting
+    # Make sure the dataset isn't empty before we start iterating.
     if len(dataset) == 0:
         print("Dataset is empty. Please check the LMDB path.")
     else:

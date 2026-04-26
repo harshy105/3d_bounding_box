@@ -3,23 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-""" Pointnet2Backbone — slimmed for single-object, ~2k instance dataset.
+""" 
+This is a slimmed-down version of the PointNet++ backbone, optimized for a smaller, 
+single-object dataset. The original architecture was overkill, so I've made a few tweaks:
 
-    Changes vs. original:
-      - SA layers:    4 → 3  (SA4 removed — redundant for pre-cropped objects)
-      - npoint:       2048/1024/512/256 → 512/128/32
-                      Object is already isolated; dense sampling wastes compute
-                      and adds parameters that overfit on small datasets.
-      - MLP widths:   narrowed ~50% throughout to reduce parameter count
-      - FP layers:    both removed — feature propagation back to all points is
-                      only needed for per-point tasks (voting, segmentation).
-                      BboxRegressionHead global-pools the SA3 output directly,
-                      so FP adds zero useful signal and significant parameters.
-      - Output key:   'sa3_features'/'sa3_xyz' 
+- Reduced from 4 to 3 Set Abstraction (SA) layers since we're working with pre-cropped objects.
+- Lowered the number of points sampled and Narrowed the MLPs.
 
-    Parameter count (approximate):
-        Original backbone : ~3.1 M
-        This backbone     : ~0.5 M   ← much better fit for 2k samples
+This brings the parameter count down to ~0.5M.
 """
 
 import torch
@@ -106,7 +97,7 @@ class Pointnet2Backbone(nn.Module):
 
         xyz, features = self._break_up_pc(pointcloud)
 
-        # --------- 3 SET ABSTRACTION LAYERS ---------
+        # Pass through three Set Abstraction layers
         xyz, features, fps_inds = self.sa1(xyz, features)
         end_points['sa1_inds']     = fps_inds
         end_points['sa1_xyz']      = xyz

@@ -15,7 +15,7 @@ def geodesic_loss(R_pred: Tensor, R_targ: Tensor) -> Tensor:
     """
     R_rel = torch.bmm(R_pred.transpose(1, 2), R_targ)
     trace = R_rel[:, 0, 0] + R_rel[:, 1, 1] + R_rel[:, 2, 2]
-    # Clamp to prevent NaN gradients (as we discussed!)
+    # Clamp to prevent NaN gradients
     cos_ang = ((trace - 1.0) / 2.0).clamp(-1.0 + 1e-6, 1.0 - 1e-6)
     return torch.acos(cos_ang).mean()
 
@@ -50,10 +50,10 @@ class InstanceBoxLoss(nn.Module):
                 # Based on Zhou et. al. 2019
                 loss_r = geodesic_loss(R_pred, R_targ)
             if self.rotation_loss_type.value == 2:
-                # values are small thus no need for Huber
+                # Values are small thus no need for Huber
                 loss_r = F.mse_loss(R_pred, R_targ, reduce="mean") 
             if self.rotation_loss_type.value == 3:
-                # values are small thus no need for Huber
+                # Values are small thus no need for Huber
                 loss_r = F.mse_loss(pred_rot6d, targ_rot6d, reduction='mean') 
                 
             # Corner loss based on Frustum-Pointnet
